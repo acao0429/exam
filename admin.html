@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>老師後台 - 題庫管理</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="quiz-header">
+    <a class="back" href="index.html">⬅ 回首頁</a>
+    <h1>🛠 老師後台</h1>
+    <span class="header-mascot">🧑‍🏫</span>
+  </header>
+
+  <main class="screen">
+
+    <!-- 登入畫面 -->
+    <section id="login-screen">
+      <div class="panel">
+        <h2>🔒 老師登入</h2>
+        <div class="form-row">
+          <label>帳號</label>
+          <input type="text" id="login-user" autocomplete="username">
+        </div>
+        <div class="form-row">
+          <label>密碼</label>
+          <input type="password" id="login-pass" autocomplete="current-password">
+        </div>
+        <div class="center">
+          <button class="btn" id="login-btn">🔑 登入</button>
+        </div>
+        <p class="form-error" id="login-error"></p>
+      </div>
+    </section>
+
+    <!-- 管理畫面 -->
+    <section id="admin-screen" class="hidden">
+      <div class="panel tabbar">
+        <button class="chip selected" data-tab="manual">✏️ 逐字輸入</button>
+        <button class="chip" data-tab="batch">⚡ 批次輸入</button>
+        <button class="chip" data-tab="content">📖 文意測驗</button>
+        <button class="chip" data-tab="idiom">🎯 成語練習</button>
+      </div>
+
+      <!-- 逐字輸入 -->
+      <div id="tab-manual">
+        <div class="panel">
+          <h2>📝 生字/語詞 題庫管理</h2>
+          <p class="hint">在這裡新增課次、輸入生字與注音。改完記得「儲存」或「匯出」。</p>
+
+          <div class="form-row">
+            <label>課次名稱</label>
+            <input type="text" id="lesson-name" placeholder="例如：第一課 春天來了">
+            <button class="btn btn-blue btn-sm" id="add-lesson-btn" style="margin-left:8px">＋ 新增課次</button>
+          </div>
+
+          <div class="form-row">
+            <label>選擇課次</label>
+            <div class="inline-row">
+              <select id="lesson-select"></select>
+              <button class="btn btn-sm btn-gray" id="delete-lesson-btn">🗑 刪除此課</button>
+            </div>
+          </div>
+
+          <div class="word-edit hidden" id="word-edit">
+            <div class="inline-row" style="margin-bottom:8px">
+              <button class="btn btn-blue btn-sm" id="fill-defs-btn">🔍 批次查詞義（教育部辭典）</button>
+              <button class="btn btn-gray btn-sm" id="fill-defs-ai-btn">🤖 AI 補詞義</button>
+              <span class="hint">先填生字，再按這裡自動找「語詞意義」（查不到或想自訂可直接在欄位改）。</span>
+            </div>
+            <table class="word-table">
+              <thead>
+                <tr><th>國字</th><th>注音</th><th>詞義（選填，詞義測驗用）</th><th></th></tr>
+              </thead>
+              <tbody id="word-tbody"></tbody>
+            </table>
+            <div class="center" style="margin-top:10px">
+              <button class="btn btn-blue btn-sm" id="add-word-btn">＋ 新增一個生字</button>
+              <button class="btn btn-sm" id="save-lesson-btn">💾 儲存此課</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 批次輸入 -->
+      <div id="tab-batch" class="hidden">
+        <div class="panel">
+          <h2>⚡ 批次輸入（自動配注音）</h2>
+          <p class="hint">把整課的生字或語詞貼進來，一次自動配上注音。<br>
+      <b>換行、頓號、逗號、分號、空白都可以分開</b>（例如：<b>春天、花朵、鳥兒</b> 或一行一個）。<br>
+      <b>有連網</b>時用教育部線上字典（破音字依語詞判斷，比較準）；<b>沒連網</b>時自動改用內建離線表。</p>
+          <textarea id="batch-text" rows="10" placeholder="春天
+花朵、鳥、飛
+書包；鉛筆；朋友　快樂"></textarea>
+          <div class="center">
+            <button class="btn btn-blue" id="batch-run-btn">✨ 自動配注音</button>
+          </div>
+          <p class="hint" id="batch-status"></p>
+          <div class="word-edit hidden" id="batch-preview-wrap">
+            <p class="hint">確認沒問題後，選好課次就可以加入題庫；有錯直接在注音欄修改。</p>
+            <div class="form-row">
+              <label>要加入哪一課</label>
+              <select id="batch-lesson-select"></select>
+            </div>
+            <table class="word-table">
+              <thead><tr><th>生字/語詞</th><th>注音（可修改）</th><th></th></tr></thead>
+              <tbody id="batch-tbody"></tbody>
+            </table>
+            <div class="center" style="margin-top:10px">
+              <button class="btn" id="batch-add-btn">➕ 加入題庫</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 文意測驗 -->
+      <div id="tab-content" class="hidden">
+        <div class="panel">
+          <h2>📖 文意測驗 題庫管理</h2>
+          <p class="hint">把課文貼上來，再一題一題輸入題目、四個選項，並勾選正確答案。改完記得「儲存」或「匯出」。</p>
+
+          <div class="form-row">
+            <label>課次名稱</label>
+            <input type="text" id="content-lesson-name" placeholder="例如：第一課 春天來了">
+            <button class="btn btn-blue btn-sm" id="add-content-lesson-btn" style="margin-left:8px">＋ 新增課次</button>
+          </div>
+
+          <div class="form-row">
+            <label>選擇課次</label>
+            <div class="inline-row">
+              <select id="content-lesson-select"></select>
+              <button class="btn btn-sm btn-gray" id="delete-content-lesson-btn">🗑 刪除此課</button>
+            </div>
+          </div>
+
+          <div class="word-edit hidden" id="content-edit">
+            <div class="form-row">
+              <label>文章標題</label>
+              <input type="text" class="admin-input" id="content-title" placeholder="例如：春天來了">
+            </div>
+            <div class="form-row">
+              <label>課文內容</label>
+              <textarea id="content-passage" rows="8" placeholder="把課文整段貼在這裡"></textarea>
+            </div>
+
+            <div class="form-row">
+              <label>✨ AI 自動出題（選填）</label>
+              <div class="inline-row">
+                <select id="ai-provider">
+                  <option value="gemini">Gemini（免費額度）</option>
+                  <option value="groq">Groq（免費額度）</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+                <input type="password" class="admin-input" id="ai-key" placeholder="貼上 API 金鑰（三家可各存一組，切換自動帶入）">
+              </div>
+            </div>
+            <div class="form-row" style="margin-bottom:6px">
+              <div class="inline-row">
+                <input type="text" class="admin-input" id="ai-model" placeholder="模型名稱（留空用預設，可自訂）">
+                <button class="btn btn-gray btn-sm" id="ai-save-btn">💾 存金鑰</button>
+                <button class="btn btn-gray btn-sm" id="ai-test-btn">🔌 測試連線</button>
+              </div>
+            </div>
+            <p class="hint">Gemini、Groq、OpenAI 的金鑰會分開存放：先選好提供者 → 貼金鑰 → 按「存金鑰」，切換提供者時自動帶入，不用重貼。沒金鑰時自動改用「教育部辭典」免費規則式出題（需連網）。</p>
+            <div class="center" style="margin-bottom:14px">
+              <button class="btn btn-blue" id="gen-btn">✨ 自動出題</button>
+            </div>
+            <p class="hint" id="gen-status"></p>
+
+            <h3 class="subtitle">✍️ 出題（每題：題目＋四個選項＋勾選正確答案）</h3>
+            <div id="content-questions"></div>
+            <div class="center" style="margin-top:10px">
+              <button class="btn btn-blue btn-sm" id="add-content-question-btn">＋ 加一題</button>
+              <button class="btn btn-sm" id="save-content-btn">💾 儲存此課</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 成語練習 -->
+      <div id="tab-idiom" class="hidden">
+        <div class="panel">
+          <h2>⚡ 批次輸入成語（自動查資料）</h2>
+          <p class="hint">把整課的成語一次貼進來，自動找注音、釋義與近反義。<br>
+          <b>換行、頓號、逗號、分號、空白都可以分開</b>（例如：<b>一心一意、聚精會神</b> 或一行一個）。<br>
+          查不到的欄位會留空，可以手填或按下面的「🤖 AI 補齊」。</p>
+          <textarea id="idiom-batch-text" rows="6" placeholder="一心一意、聚精會神
+守株待兔、畫蛇添足
+胸有成竹"></textarea>
+          <div class="center">
+            <button class="btn btn-blue" id="idiom-batch-run-btn">✨ 批次查成語</button>
+          </div>
+          <p class="hint" id="idiom-batch-status"></p>
+          <div class="word-edit hidden" id="idiom-batch-preview-wrap">
+            <p class="hint">確認沒問題後，就加入目前選的課次；有錯直接在欄位改。</p>
+            <table class="word-table idiom-table">
+              <thead><tr><th>成語</th><th>注音</th><th>釋義</th><th>近義</th><th>反義</th></tr></thead>
+              <tbody id="idiom-batch-tbody"></tbody>
+            </table>
+            <div class="center" style="margin-top:10px">
+              <button class="btn" id="idiom-batch-add-btn">➕ 加入此課</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>🎯 成語練習 題庫管理</h2>
+          <p class="hint">輸入成語、逐字注音與釋義，就可出「看成語選釋義、看釋義選成語、缺字填空、近義反義」四種題。<br>
+          填好成語後，可按「🔍 批次查釋義」用內建成語庫自動補齊；想一次生一排成語，可按「🤖 AI 依課名補成語」。</p>
+
+          <div class="form-row">
+            <label>課次名稱</label>
+            <input type="text" id="idiom-lesson-name" placeholder="例如：第一課 專心做事">
+            <button class="btn btn-blue btn-sm" id="add-idiom-lesson-btn" style="margin-left:8px">＋ 新增課次</button>
+          </div>
+
+          <div class="form-row">
+            <label>選擇課次</label>
+            <div class="inline-row">
+              <select id="idiom-lesson-select"></select>
+              <button class="btn btn-sm btn-gray" id="delete-idiom-lesson-btn">🗑 刪除此課</button>
+            </div>
+          </div>
+
+          <div class="word-edit hidden" id="idiom-edit">
+            <div class="inline-row" style="margin-bottom:8px">
+              <button class="btn btn-blue btn-sm" id="fill-idioms-local-btn">🔍 批次查釋義（內建成語庫）</button>
+              <button class="btn btn-gray btn-sm" id="fill-idioms-ai-btn">🤖 AI 補齊（釋義/注音/近反義）</button>
+              <button class="btn btn-gray btn-sm" id="suggest-idioms-btn">🤖 AI 依課名補成語</button>
+              <span class="hint">有連網時釋義以「教育部成語典＋內建庫」為準，老師再微調即可。</span>
+            </div>
+            <table class="word-table idiom-table">
+              <thead>
+                <tr><th>成語</th><th>注音（逐字，空一格）</th><th>釋義</th><th>近義（選填）</th><th>反義（選填）</th><th></th></tr>
+              </thead>
+              <tbody id="idiom-tbody"></tbody>
+            </table>
+            <div class="center" style="margin-top:10px">
+              <button class="btn btn-blue btn-sm" id="add-idiom-btn">＋ 新增一個成語</button>
+              <button class="btn btn-sm" id="save-idiom-lesson-btn">💾 儲存此課</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 發給學生 -->
+      <div class="panel">
+        <h2>📅 發給學生使用</h2>
+        <p class="hint">存到這台電腦：只有這台電腦的瀏覽器看得到。<br>
+        發給學生在家用：下載題庫檔，取代網站裡的「js」資料夾同名檔案即可。</p>
+        <div class="center">
+          <button class="btn btn-green" id="save-local-btn">💾 存到這台電腦</button>
+          <button class="btn btn-green" id="export-student-btn">📤 匯出給學生（一份檔含全部題庫）</button>
+          <button class="btn btn-blue" id="export-btn">📤 匯出 data.js（國字注音題庫）</button>
+          <button class="btn btn-blue" id="export-content-btn">📤 匯出 data-content.js（文意題庫）</button>
+          <button class="btn btn-blue" id="export-idiom-btn">📤 匯出 data-idioms.js（成語題庫）</button>
+        </div>
+        <p class="hint" id="save-msg" style="margin-top:8px"></p>
+
+        <div class="panel" style="margin-top:16px">
+          <h2>📦 備份與匯入</h2>
+          <p class="hint">「匯出」會下載檔案，把檔案蓋回 <b>js/</b> 資料夾就是大家能用的題庫；<br>
+          用「匯入」可以把 data.js、data-content.js 或「備份.json」讀回後台，資料不見時就能還原。</p>
+          <div class="inline-row" style="justify-content:center; flex-wrap:wrap">
+            <label class="btn btn-blue btn-sm" for="import-file" style="cursor:pointer">📂 匯入檔案（data.js / data-content.js / 備份.json）</label>
+            <input type="file" id="import-file" accept=".js,.json" style="display:none">
+            <button class="btn btn-green btn-sm" id="backup-btn">📤 匯出全部備份（json）</button>
+            <button class="btn btn-gray btn-sm" id="reset-local-btn">🗑 清除本機暫存，改用資料夾內題庫</button>
+          </div>
+          <p class="hint" id="restore-msg" style="margin-top:8px"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/data-content.js"></script>
+  <script src="js/data-idioms.js"></script>
+  <script src="js/offline-zhuyin.js"></script>
+  <script src="js/offline-idioms.js"></script>
+  <script src="js/gen-questions.js"></script>
+  <script src="js/gen-idioms.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

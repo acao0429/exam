@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>國語月考複習樂園</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="home">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <span class="topbar-title">🦉 國語月考複習樂園</span>
+      <button class="topbar-login" id="top-login-btn">🔑 老師登入</button>
+    </div>
+  </div>
+
+  <div class="login-pop hidden" id="login-pop">
+    <div class="panel">
+      <h2>🔒 老師登入</h2>
+      <div class="form-row">
+        <label>帳號</label>
+        <input type="text" id="login-user" autocomplete="username">
+      </div>
+      <div class="form-row">
+        <label>密碼</label>
+        <input type="password" id="login-pass" autocomplete="current-password">
+      </div>
+      <div class="center">
+        <button class="btn" id="login-btn">🔑 登入後台</button>
+        <button class="btn btn-gray btn-sm" id="login-cancel">取消</button>
+      </div>
+      <p class="form-error" id="login-error"></p>
+      <p class="hint">預設帳號 teacher、密碼 1234，請到 js/config.js 修改。</p>
+    </div>
+  </div>
+
+  <header class="hero">
+    <div class="hero-mascot">🦉</div>
+    <h1>國語月考複習樂園</h1>
+    <p>每天練一點，考試好簡單！</p>
+  </header>
+
+  <main class="home-cards">
+    <a class="card" href="zhuyin.html">
+      <div class="card-icon">🔤</div>
+      <h2>國字注音</h2>
+      <p>看字選音、看音選字，還有語詞意義測驗，把生字全都記牢牢。</p>
+      <span class="card-btn">開始練習</span>
+    </a>
+
+    <a class="card" href="content.html">
+      <div class="card-icon">📖</div>
+      <h2>文意內容</h2>
+      <p>理解課文與句子意思，讀懂文章不頭痛。</p>
+      <span class="card-btn">開始練習</span>
+    </a>
+
+    <a class="card" href="idiom.html">
+      <div class="card-icon">🎯</div>
+      <h2>成語練習</h2>
+      <p>成語猜一猜，用對成語一把罩。</p>
+      <span class="card-btn">開始練習</span>
+    </a>
+  </main>
+
+  <footer class="credit">給老師：點右上角「老師登入」即可用網頁介面管理題庫。</footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/home.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Windows 捷徑檔
+*.lnk
+desktop.ini
+
+# 系統 / 編輯器
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# 暫存
+*.tmp
+*.log

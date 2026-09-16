@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文意內容練習</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="quiz-header">
+    <a class="back" href="index.html">⬅ 回首頁</a>
+    <h1>📖 文意內容</h1>
+    <span class="header-mascot">🦉</span>
+  </header>
+
+  <main class="screen">
+    <!-- 設定畫面 -->
+    <section id="setup-screen">
+      <div class="panel">
+        <h2>📚 選擇課次</h2>
+        <p class="hint">點一下選課次（可複選），沒選任何課次的話，是不能開始的喔。</p>
+        <div class="chips" id="lesson-chips"></div>
+      </div>
+      <div class="panel">
+        <h2>👀 作答時想看課文嗎？</h2>
+        <p class="hint">選「藏起來」會比較有挑戰，想不起來時，也能按「📖 顯示課文」偷看一下。</p>
+        <div class="chips" id="view-chips">
+          <button class="chip selected" data-view="show">📖 一直顯示課文作答</button>
+          <button class="chip" data-view="hide">🙈 藏起來，先讀完再答</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>🔢 每次做幾題？</h2>
+        <p class="hint">題庫夠多的話，會隨機抽題，每次都不同喔！</p>
+        <div class="chips" id="count-chips">
+          <button class="chip selected" data-count="10">10 題</button>
+          <button class="chip" data-count="15">15 題</button>
+          <button class="chip" data-count="all">全部題數</button>
+        </div>
+      </div>
+      <div class="center">
+        <button class="btn start-btn" id="start-btn">🌟 開始練習</button>
+      </div>
+      <div class="panel">
+        <h2>📂 匯入題庫</h2>
+        <p class="hint">老師有傳「學生題庫.json」給你的話，按這裡選一次，三種練習（國字注音＋文意＋成語）就一起載入。</p>
+        <label class="btn btn-blue btn-sm" for="import-bank-file" style="cursor:pointer">📂 匯入題庫檔</label>
+        <input type="file" id="import-bank-file" accept=".json" style="display:none">
+        <p class="hint" id="import-status" style="margin-top:8px"></p>
+      </div>
+    </section>
+
+    <!-- 作答畫面 -->
+    <section id="quiz-screen" class="hidden">
+      <div class="quiz-card">
+        <div class="progress-text" id="progress-text"></div>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="score-row">
+          <span id="correct-count">✅ 對：0</span>
+          <span id="wrong-count">❌ 錯：0</span>
+        </div>
+
+        <div class="passage-head">
+          <span id="quiz-lesson"></span>
+          <button class="btn btn-gray btn-sm" id="passage-toggle">🙈 藏起來</button>
+        </div>
+        <div class="passage-box" id="passage-box">
+          <p id="passage-text"></p>
+        </div>
+
+        <div id="question-area"></div>
+
+        <div class="feedback-wrap hidden" id="feedback-area">
+          <div class="feedback" id="feedback-box"></div>
+          <div class="center">
+            <button class="btn btn-green hidden" id="next-btn">下一題 ➡</button>
+            <button class="btn btn-green hidden" id="finish-btn">看結果 🎁</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 結算畫面 -->
+    <section id="result-screen" class="hidden">
+      <div class="panel center">
+        <div class="result-anim" id="result-anim">🎉</div>
+        <h2 id="result-title"></h2>
+        <div class="stars-row" id="stars-row"></div>
+        <div class="result-score" id="result-score"></div>
+        <div class="wrong-list hidden" id="wrong-list">
+          <h3>🔍 答錯的再想想</h3>
+          <ul id="wrong-list-items"></ul>
+        </div>
+        <p>
+          <button class="btn" onclick="resetQuiz()">🔁 再玩一次</button>
+          <button class="btn btn-blue" onclick="backToSetup()">🎯 換個課次</button>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/data-content.js"></script>
+  <script src="js/import-all.js"></script>
+  <script src="js/content.js"></script>
+</body>
+</html>
