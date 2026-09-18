@@ -99,10 +99,7 @@
     renderLessonSelect();
     renderIdiomLessonSelect();
     if (okWord && okContent && okIdiom) {
-      downloadTextFile("data.js", buildWordDataJS());
-      downloadTextFile("data-content.js", buildContentJS(cBankToFlat().filter((it) => !validateContent(it))));
-      downloadTextFile("data-idioms.js", buildIdiomDataJS());
-      $("save-msg").textContent = "✅ 三份題庫都已存檔，並自動下載 data.js、data-content.js、data-idioms.js 備份！";
+      $("save-msg").textContent = "✅ 三份題庫都已存到這台電腦！要給學生，請按「📤 匯出給學生」取得一份含全部題庫的檔案。";
     } else {
       $("save-msg").textContent = "⚠️ 儲存失敗，可能是瀏覽器空間不足。";
     }
@@ -246,7 +243,7 @@
     renderLessonSelect();
     renderBatchLessonSelect();
     persistWordBank();
-    $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了匯出 data.js。`;
+    $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了按「📤 匯出給學生」取得含全部題庫的檔。`;
   }
 
   /* ---------- 生字表格 ---------- */
@@ -332,8 +329,7 @@
     if (persistWordBank()) {
       renderLessonSelect();
       renderBatchLessonSelect();
-      downloadTextFile("data.js", buildWordDataJS());
-      $("save-msg").textContent = "✅ 已儲存，並自動下載 data.js 備份！把這個檔案取代 js/data.js 發給學生即可。";
+      $("save-msg").textContent = "✅ 已儲存！要給學生，按「📤 匯出給學生」取得包含國字注音的題庫檔。";
     } else {
       $("save-msg").textContent = "⚠️ 儲存失敗。";
     }
@@ -639,7 +635,7 @@
     delete cBank[lesson];
     renderContentLessonSelect();
     persistContentBank();
-    $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了匯出 data-content.js。`;
+    $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了按「📤 匯出給學生」取得含全部題庫的檔。`;
   }
 
   function renderContentForm() {
@@ -778,8 +774,7 @@
     }
     if (persistContentBank()) {
       renderContentLessonSelect();
-      downloadTextFile("data-content.js", buildContentJS(cBankToFlat().filter((it) => !validateContent(it))));
-      $("save-msg").textContent = "✅ 文意題庫已儲存，並自動下載 data-content.js 備份！";
+      $("save-msg").textContent = "✅ 文意題庫已儲存！要給學生，按「📤 匯出給學生」取得包含文意的題庫檔。";
     } else {
       $("save-msg").textContent = "⚠️ 儲存失敗。";
     }
@@ -985,7 +980,7 @@
     delete iBank[lesson];
     renderIdiomLessonSelect();
     persistIBank();
-    $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了匯出 data-idioms.js。`;
+    $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了按「📤 匯出給學生」取得含全部題庫的檔。`;
   }
 
   function blankIdiomRow() {
@@ -1091,8 +1086,7 @@
     collectIdiomRows();
     if (persistIBank()) {
       renderIdiomLessonSelect();
-      downloadTextFile("data-idioms.js", buildIdiomDataJS());
-      $("save-msg").textContent = "✅ 成語題庫已儲存，並自動下載 data-idioms.js 備份！把這個檔案取代 js/data-idioms.js 發給學生即可。";
+      $("save-msg").textContent = "✅ 成語題庫已儲存！要給學生，按「📤 匯出給學生」取得包含成語的題庫檔。";
     } else {
       $("save-msg").textContent = "⚠️ 儲存失敗。";
     }
@@ -1320,102 +1314,8 @@
     };
   }
 
-  /* 產生 data.js 的文字內容 */
-  function buildWordDataJS() {
-    const lines = [];
-    lines.push("/* 這份題庫由老師後台匯出。若要手動修改格式，請參考 js/data.js 原檔說明。 */");
-    lines.push("");
-    lines.push("const WORD_BANK = [");
-    const flat = bankToFlat();
-    flat.forEach((w, i) => {
-      const comma = i === flat.length - 1 ? "" : ",";
-      const def = w.def ? `, def: ${JSON.stringify(w.def)}` : "";
-      lines.push(`  { lesson: "${w.lesson}", char: "${w.char}", zhuyin: "${w.zhuyin}"${def} }${comma}`);
-    });
-    lines.push("];");
-    lines.push("");
-    return lines.join("\n");
-  }
+  /* ---------- 匯出 ---------- */
 
-  function exportData() {
-    downloadTextFile("data.js", buildWordDataJS());
-    $("save-msg").textContent = "📤 已下載 data.js！請用這個檔案取代 js/data.js，再發給學生。";
-  }
-
-  /* ---------- 匯出 data-content.js ---------- */
-  function buildContentJS(lessonsOut) {
-    const lines = [];
-    lines.push("/* 文意測驗題庫由後台匯出，格式說明請看 js/data-content.js 原檔。 */");
-    lines.push("");
-    lines.push("const PASSAGE_BANK = [");
-    lessonsOut.forEach((item, i) => {
-      const comma = i === lessonsOut.length - 1 ? "" : ",";
-      lines.push("  {");
-      lines.push(`    lesson: ${JSON.stringify(item.lesson)},`);
-      lines.push(`    title: ${JSON.stringify(item.title)},`);
-      lines.push(`    passage: ${JSON.stringify(item.passage)},`);
-      lines.push("    questions: [");
-      item.questions.forEach((q, qi) => {
-        const qcomma = qi === item.questions.length - 1 ? "" : ",";
-        lines.push("      {");
-        lines.push(`        type: ${q.type ? JSON.stringify(q.type) : "\"文意\""},`);
-        lines.push(`        q: ${JSON.stringify(q.q)},`);
-        lines.push(`        options: ${JSON.stringify(q.options)},`);
-        lines.push(`        answer: ${q.answer}`);
-        if (q.explain && q.explain.trim()) lines.push(`        ,explain: ${JSON.stringify(q.explain)}`);
-        lines.push(`      }${qcomma}`);
-      });
-      lines.push("    ]");
-      lines.push(`  }${comma}`);
-    });
-    lines.push("];");
-    return lines.join("\n");
-  }
-
-  function exportContentData() {
-    const item = currentContent();
-    if (!item) {
-      alert("請先新增課次並填好題目。");
-      return;
-    }
-    const err = validateContent(item);
-    if (err) {
-      alert(`⚠️ ${err}`);
-      return;
-    }
-    const lessonsOut = Object.keys(cBank)
-      .map((name) => cBank[name])
-      .filter((it) => !validateContent(it));
-
-    downloadTextFile("data-content.js", buildContentJS(lessonsOut));
-    $("save-msg").textContent = "📤 已下載 data-content.js！請用這個檔案取代 js/data-content.js，再發給學生。";
-  }
-
-  /* ---------- 匯出 data-idioms.js ---------- */
-  function buildIdiomDataJS() {
-    const lines = [];
-    lines.push("/* 成語題庫由老師後台匯出，格式說明請看 js/data-idioms.js 原檔。 */");
-    lines.push("");
-    lines.push("const IDIOM_BANK = [");
-    const flat = iBankToFlat();
-    flat.forEach((it, i) => {
-      const comma = i === flat.length - 1 ? "" : ",";
-      const syn = it.synonym ? `, synonym: ${JSON.stringify(it.synonym)}` : "";
-      const ant = it.antonym ? `, antonym: ${JSON.stringify(it.antonym)}` : "";
-      lines.push(`  { lesson: "${it.lesson}", idiom: "${it.idiom}", bo: "${it.bo}", meaning: ${it.meaning ? JSON.stringify(it.meaning) : "\"\""}${syn}${ant} }${comma}`);
-    });
-    lines.push("];");
-    return lines.join("\n");
-  }
-
-  function exportIdiomData() {
-    const flat = iBankToFlat();
-    if (flat.length === 0) { alert("成語題庫還是空的，請先到「成語練習」頁輸入。"); return; }
-    downloadTextFile("data-idioms.js", buildIdiomDataJS());
-    $("save-msg").textContent = "📤 已下載 data-idioms.js！請用這個檔案取代 js/data-idioms.js，再發給學生。";
-  }
-
-  /* ---------- 備份 / 匯入 / 清除本機暫存 ---------- */
   function backupExport() {
     const date = new Date();
     const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
@@ -1492,7 +1392,7 @@
           if (hasContent) restoreContent(found.passageBank);
           if (hasIdiom) restoreIdioms(found.idiomBank);
         }
-        $("restore-msg").textContent = `✅ 已匯入「${file.name}」，並存進這台電腦。請再按「匯出」產生新的 data.js / data-content.js / data-idioms.js 給學生（或直接蓋回 js/ 資料夾）。`;
+        $("restore-msg").textContent = `✅ 已匯入「${file.name}」，並存進這台電腦。要給學生，請按「📤 匯出給學生」取得「學生題庫.json」一份檔（含國字注音＋文意＋成語）；或直接蓋回 js/ 資料夾裡的 data.js。`;
       } catch (e) {
         alert(`⚠️ 匯入失敗：${e.message}`);
         $("restore-msg").textContent = "";
@@ -1577,9 +1477,6 @@
       if (f) importDataFile(f);
       e.target.value = "";
     });
-    $("export-btn").addEventListener("click", exportData);
-    $("export-content-btn").addEventListener("click", exportContentData);
-    $("export-idiom-btn").addEventListener("click", exportIdiomData);
 
     $("add-idiom-lesson-btn").addEventListener("click", addIdiomLesson);
     $("idiom-lesson-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addIdiomLesson(); });

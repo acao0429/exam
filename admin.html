@@ -13,7 +13,7 @@
     <span class="header-mascot">🧑‍🏫</span>
   </header>
 
-  <main class="screen">
+  <main class="screen screen-wide">
 
     <!-- 登入畫面 -->
     <section id="login-screen">
@@ -247,14 +247,11 @@
       <!-- 發給學生 -->
       <div class="panel">
         <h2>📅 發給學生使用</h2>
-        <p class="hint">存到這台電腦：只有這台電腦的瀏覽器看得到。<br>
-        發給學生在家用：下載題庫檔，取代網站裡的「js」資料夾同名檔案即可。</p>
+        <p class="hint">「匯出給學生」會一次打包國字注音＋文意＋成語全部題庫，學生在任一練習頁匯入一次就能用。<br>
+        「存到這台電腦」只有這台電腦的瀏覽器看得到。</p>
         <div class="center">
           <button class="btn btn-green" id="save-local-btn">💾 存到這台電腦</button>
           <button class="btn btn-green" id="export-student-btn">📤 匯出給學生（一份檔含全部題庫）</button>
-          <button class="btn btn-blue" id="export-btn">📤 匯出 data.js（國字注音題庫）</button>
-          <button class="btn btn-blue" id="export-content-btn">📤 匯出 data-content.js（文意題庫）</button>
-          <button class="btn btn-blue" id="export-idiom-btn">📤 匯出 data-idioms.js（成語題庫）</button>
         </div>
         <p class="hint" id="save-msg" style="margin-top:8px"></p>
 
@@ -272,10 +269,10 @@
 
         <div class="panel" style="margin-top:16px">
           <h2>📦 備份與匯入</h2>
-          <p class="hint">「匯出」會下載檔案，把檔案蓋回 <b>js/</b> 資料夾就是大家能用的題庫；<br>
-          用「匯入」可以把 data.js、data-content.js 或「備份.json」讀回後台，資料不見時就能還原。</p>
+          <p class="hint">「匯出備份」下載一份 json，含全部三種題庫（國字注音＋文意＋成語）；<br>
+          用「匯入」把備份檔讀回後台，資料不見時就能還原。</p>
           <div class="inline-row" style="justify-content:center; flex-wrap:wrap">
-            <label class="btn btn-blue btn-sm" for="import-file" style="cursor:pointer">📂 匯入檔案（data.js / data-content.js / 備份.json）</label>
+            <label class="btn btn-blue btn-sm" for="import-file" style="cursor:pointer">📂 匯入備份檔（json）</label>
             <input type="file" id="import-file" accept=".js,.json" style="display:none">
             <button class="btn btn-green btn-sm" id="backup-btn">📤 匯出全部備份（json）</button>
             <button class="btn btn-gray btn-sm" id="reset-local-btn">🗑 清除本機暫存，改用資料夾內題庫</button>
