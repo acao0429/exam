@@ -259,6 +259,18 @@
         <p class="hint" id="save-msg" style="margin-top:8px"></p>
 
         <div class="panel" style="margin-top:16px">
+          <h2>☁️ 雲端同步（雲端資料庫）</h2>
+          <p class="hint">把題庫同步到雲端後，學生開練習頁會自動抓最新題庫（抓不到時仍用本機）。<br>
+          首次使用：在 <b>js/app-config.js</b> 填好 apiBase（已預填部署網址），並在下方輸入 admin token（只存在這台瀏覽器的 localStorage）。</p>
+          <div class="inline-row" style="justify-content:center; flex-wrap:wrap">
+            <input type="password" id="cloud-token" style="max-width:280px" placeholder="admin token">
+            <button class="btn btn-green btn-sm" id="cloud-push-btn">☁️ 同步本機題庫到雲端</button>
+            <button class="btn btn-blue btn-sm" id="cloud-pull-btn">☁️ 從雲端載入到本機</button>
+          </div>
+          <p class="hint" id="cloud-msg" style="margin-top:8px"></p>
+        </div>
+
+        <div class="panel" style="margin-top:16px">
           <h2>📦 備份與匯入</h2>
           <p class="hint">「匯出」會下載檔案，把檔案蓋回 <b>js/</b> 資料夾就是大家能用的題庫；<br>
           用「匯入」可以把 data.js、data-content.js 或「備份.json」讀回後台，資料不見時就能還原。</p>
@@ -275,6 +287,8 @@
   </main>
 
   <script src="js/config.js"></script>
+  <script src="js/app-config.js"></script>
+  <script src="js/cloud.js"></script>
   <script src="js/data.js"></script>
   <script src="js/data-content.js"></script>
   <script src="js/data-idioms.js"></script>

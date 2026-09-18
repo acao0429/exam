@@ -1524,6 +1524,38 @@
     $("restore-msg").textContent = "💡 若想讓資料暫時留在瀏覽器，再按一次「存到這台電腦」即可。";
   }
 
+  /* ---------- 雲端同步（Cloudflare D1） ---------- */
+  function cloudInitUI() {
+    const tokenInput = $("cloud-token");
+    if (!tokenInput || !window.ExamCloud) return; /* 頁面未含雲端支援 */
+    tokenInput.value = window.ExamCloud.getToken() || "";
+
+    $("cloud-push-btn").addEventListener("click", () => {
+      const msg = $("cloud-msg");
+      msg.textContent = "☁️ 同步中…";
+      window.ExamCloud.setToken(tokenInput.value.trim());
+      collectWordRows();
+      collectIdiomRows();
+      window.ExamCloud.pushAll(buildAllDataJSON())
+        .then(() => { msg.textContent = "✅ 已把三份題庫同步到雲端！學生開練習頁會自動抓到最新題庫。"; })
+        .catch((e) => { msg.textContent = "❌ 同步失敗：" + e.message; });
+    });
+
+    $("cloud-pull-btn").addEventListener("click", () => {
+      const msg = $("cloud-msg");
+      msg.textContent = "☁️ 讀取雲端中…";
+      window.ExamCloud.fetchBanks()
+        .then((data) => {
+          if (!data) throw new Error("尚未設定 API 網址（js/app-config.js 的 apiBase）");
+          restoreWords(data.words || []);
+          restoreContent(data.content || []);
+          restoreIdioms(data.idioms || []);
+          msg.textContent = "✅ 已從雲端載入三份題庫，並存進這台電腦。";
+        })
+        .catch((e) => { msg.textContent = "❌ 載入失敗：" + e.message; });
+    });
+  }
+
   /* ---------- 事件綁定 ---------- */
   function bind() {
     $("login-btn").addEventListener("click", doLogin);
@@ -1600,6 +1632,7 @@
     cBank = loadCBank();
     iBank = loadIBank();
     bind();
+    cloudInitUI();
     checkLogin();
   });
 })();

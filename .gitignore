@@ -11,3 +11,11 @@ Thumbs.db
 # 暫存
 *.tmp
 *.log
+
+# Cloudflare Worker
+node_modules/
+.wrangler/
+worker/.dev.vars
+worker/.admin-token.txt
+.dev.vars
+flags

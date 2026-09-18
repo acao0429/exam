@@ -1,0 +1,9 @@
+name = "exam-api"
+main = "src/index.js"
+compatibility_date = "2026-09-18"
+
+# D1 綁定：後台/學生端題庫 API 使用的資料庫
+[[d1_databases]]
+binding = "DB"
+database_name = "exam-db"
+database_id = "4000038e-00e3-4628-b8d9-848443664fd7"

@@ -8,10 +8,15 @@
   /* 題庫：優先使用老師後台存到這台電腦的版本 */
   const STORE_KEY = "exam_word_bank_v1";
   let BANK = WORD_BANK;
-  try {
-    const saved = localStorage.getItem(STORE_KEY);
-    if (saved) BANK = JSON.parse(saved);
-  } catch (e) { /* 忽略 */ }
+
+  function loadBank() {
+    try {
+      const saved = localStorage.getItem(STORE_KEY);
+      if (saved) BANK = JSON.parse(saved);
+    } catch (e) { /* 忽略 */ }
+  }
+
+  loadBank();
 
   function getBank() {
     /* 老師後台存過（即使存的是空的），就完全以它為準，不要再回退到內建範例 */
@@ -354,5 +359,17 @@
   window.resetQuiz = resetQuiz;
   window.backToSetup = backToSetup;
 
-  document.addEventListener("DOMContentLoaded", init);
+  function boot() {
+    if (window.ExamCloud && window.ExamCloud.enabled()) {
+      /* 雲端優先：抓取雲端題庫寫進本機快取，再重新載入 BANK；失敗就用本機。 */
+      window.ExamCloud.hydrateLocalFromCloud()
+        .then(() => { loadBank(); })
+        .catch(() => { loadBank(); })
+        .finally(init);
+    } else {
+      init();
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", boot);
 })();
