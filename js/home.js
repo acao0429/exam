@@ -22,7 +22,7 @@
     const u = $("login-user").value.trim();
     const p = $("login-pass").value;
     if (u === ADMIN_CONFIG.username && p === ADMIN_CONFIG.password) {
-      sessionStorage.setItem(LOGIN_KEY, "1");
+      localStorage.setItem(LOGIN_KEY, "1");
       window.location.href = "admin.html";
     } else {
       $("login-error").textContent = "❌ 帳號或密碼錯誤，請再試一次。";
