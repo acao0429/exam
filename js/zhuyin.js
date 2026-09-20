@@ -260,10 +260,30 @@
       correctCount++;
       box.className = "feedback ok";
       box.innerHTML = "🎉 好棒！答對了！";
+      // 作答上雲（答對也記錄）
+      uploadAttempt({
+        bank: "zhuyin",
+        lesson: q.word.lesson || "",
+        mode: q.mode,
+        itemKey: q.word.char,
+        prompt: q.word.char,
+        chosen: chosen,
+        correct: true
+      });
     } else {
       wrongCount++;
       wrongItems.push({ char: q.word.char, zhuyin: q.word.zhuyin, def: q.word.def });
       box.className = "feedback no";
+      // 作答上雲
+      uploadAttempt({
+        bank: "zhuyin",
+        lesson: q.word.lesson || "",
+        mode: q.mode,
+        itemKey: q.word.char,
+        prompt: q.word.char,
+        chosen: chosen,
+        correct: isCorrect
+      });
       if (q.mode === "word2meaning" || q.mode === "meaning2word") {
         box.innerHTML = `💪 沒關係！再複習一次：<b>${q.word.char}</b>（${q.word.zhuyin}）＝ ${q.word.def}`;
       } else {
@@ -359,14 +379,147 @@
   window.resetQuiz = resetQuiz;
   window.backToSetup = backToSetup;
 
+  /* ---------- 學生登入與作答上雲 ---------- */
+  function initStudentLogin() {
+    if (!window.ExamCloud || !window.ExamCloud.enabled()) return;
+    const loginSec = $("student-login-section");
+    const welcome = $("student-welcome");
+    const loginMsg = $("student-login-msg");
+    const loginBtn = $("student-login-btn");
+    const logoutBtn = $("student-logout-btn");
+
+    // 檢查是否已登入
+    if (window.ExamCloud.studentLoggedIn()) {
+      const info = window.ExamCloud.getStudentInfo();
+      loginSec.classList.remove("hidden");
+      welcome.textContent = "👋 歡迎，" + (info && info.name || info && info.seat);
+      loginBtn.style.display = "none";
+      logoutBtn.style.display = "inline-block";
+      // 登入時整包合併錯題本
+      syncWrongBook();
+    } else {
+      loginSec.classList.remove("hidden");
+    }
+
+    // 登入按鈕
+    loginBtn.addEventListener("click", async () => {
+      const seat = $("student-seat").value.trim();
+      const password = $("student-password").value;
+      if (!seat || !password) { loginMsg.textContent = "請輸入座號與密碼"; return; }
+      try {
+        const data = await window.ExamCloud.studentLogin(seat, password);
+        loginMsg.textContent = "登入成功！歡迎 " + (data.student && data.student.name || seat);
+        welcome.textContent = "👋 歡迎，" + (data.student && data.student.name || seat);
+        loginBtn.style.display = "none";
+        logoutBtn.style.display = "inline-block";
+        syncWrongBook();
+      } catch (e) {
+        loginMsg.textContent = "登入失敗：" + e.message;
+      }
+    });
+
+    // 登出按鈕
+    logoutBtn.addEventListener("click", async () => {
+      await window.ExamCloud.studentLogout();
+      loginSec.classList.add("hidden");
+      welcome.textContent = "";
+      loginBtn.style.display = "inline-block";
+      logoutBtn.style.display = "none";
+      loginMsg.textContent = "已登出";
+    });
+
+    // 修改密碼按鈕
+    const changePwdBtn = $("change-password-btn");
+    const changePwdPanel = $("change-password-panel");
+    const cancelChangeBtn = $("cancel-change-btn");
+    const changePwdMsg = $("change-password-msg");
+    if (changePwdBtn) {
+      changePwdBtn.addEventListener("click", () => {
+        changePwdPanel.classList.toggle("hidden");
+        changePwdMsg.textContent = "";
+        $("old-password").value = "";
+        $("new-password").value = "";
+        $("confirm-password").value = "";
+      });
+    }
+    if (cancelChangeBtn) {
+      cancelChangeBtn.addEventListener("click", () => {
+        changePwdPanel.classList.add("hidden");
+        changePwdMsg.textContent = "";
+      });
+    }
+    const submitChangeBtn = $("submit-change-btn");
+    if (submitChangeBtn) {
+      submitChangeBtn.addEventListener("click", async () => {
+        const oldPwd = $("old-password").value;
+        const newPwd = $("new-password").value;
+        const confirmPwd = $("confirm-password").value;
+        if (!oldPwd || !newPwd || !confirmPwd) {
+          changePwdMsg.textContent = "請填寫所有欄位";
+          return;
+        }
+        if (newPwd !== confirmPwd) {
+          changePwdMsg.textContent = "新密碼與確認密碼不一致";
+          return;
+        }
+        if (newPwd.length < 4) {
+          changePwdMsg.textContent = "密碼至少 4 個字元";
+          return;
+        }
+        try {
+          await window.ExamCloud.studentChangePassword(oldPwd, newPwd);
+          changePwdMsg.textContent = "✅ 密碼已修改，請重新登入";
+          changePwdPanel.classList.add("hidden");
+          // 登出讓學生重新登入
+          await window.ExamCloud.studentLogout();
+          loginSec.classList.add("hidden");
+          loginBtn.style.display = "inline-block";
+          logoutBtn.style.display = "none";
+          welcome.textContent = "";
+        } catch (e) {
+          changePwdMsg.textContent = "❌ " + e.message;
+        }
+      });
+    }
+  }
+
+  // 登入時整包合併錯題本
+  async function syncWrongBook() {
+    if (!window.ExamCloud || !window.ExamCloud.studentLoggedIn()) return;
+    try {
+      // 合併後更新本機 wrongItems
+      const merged = await window.ExamCloud.mergeWrongCloud(wrongItems);
+      wrongItems = merged;
+      console.log("錯題本已與雲端同步，共 " + merged.length + " 題");
+    } catch (e) {
+      console.warn("錯題本同步失敗：", e.message);
+    }
+  }
+
+  function initAttemptUpload() {
+    if (window.ExamCloud && window.ExamCloud.studentLoggedIn()) {
+      syncWrongBook();
+    }
+  }
+
+  // 作答後上傳到雲端
+  async function uploadAttempt(item) {
+    if (!window.ExamCloud || !window.ExamCloud.studentLoggedIn()) return;
+    try {
+      await window.ExamCloud.pushAttempt(item);
+    } catch (e) {
+      console.warn("作答上傳失敗：", e.message);
+    }
+  }
+
   function boot() {
     if (window.ExamCloud && window.ExamCloud.enabled()) {
       /* 雲端優先：抓取雲端題庫寫進本機快取，再重新載入 BANK；失敗就用本機。 */
       window.ExamCloud.hydrateLocalFromCloud()
         .then(() => { loadBank(); })
         .catch(() => { loadBank(); })
-        .finally(init);
-    } else {
+        .finally(() => { initAttemptUpload(); window.ExamCloud.renderStudentBar(); init(); });
+    } else { initAttemptUpload(); window.ExamCloud.renderStudentBar();
       init();
     }
   }

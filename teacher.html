@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>老師登入 - 國語月考複習樂園</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="quiz-header">
+    <a class="back" href="index.html">⬅ 回首頁</a>
+    <h1>🧑‍🏫 老師登入</h1>
+  </header>
+
+  <main class="screen screen-wide">
+    <!-- 登入畫面 -->
+    <section id="login-screen">
+      <div class="panel">
+        <h2>🔒 老師登入</h2>
+        <p class="hint">請輸入您的帳號與密碼（由系統管理員建立）。</p>
+        <div class="form-row">
+          <label>帳號</label>
+          <input type="text" id="teacher-username" placeholder="例如：wang_teacher">
+        </div>
+        <div class="form-row">
+          <label>密碼</label>
+          <input type="password" id="teacher-password" placeholder="輸入密碼">
+        </div>
+        <div class="center">
+          <button class="btn" id="teacher-login-btn">🔑 登入後台</button>
+          <button class="btn btn-gray btn-sm" id="teacher-cancel-btn">取消</button>
+        </div>
+        <p class="form-error" id="teacher-login-error"></p>
+      </div>
+    </section>
+
+    <!-- 後台主畫面（登入後顯示） -->
+    <section id="dashboard-screen" class="hidden">
+      <div class="panel">
+        <p class="hint" id="teacher-welcome"></p>
+        <div class="center" style="margin-top:12px">
+          <button class="btn btn-green" id="go-admin-btn">🛠 進入題庫管理</button>
+          <button class="btn btn-gray btn-sm" id="teacher-logout-btn">🚪 登出</button>
+        </div>
+        <p class="hint" style="margin-top:12px">
+          進入後台後，您可以管理本班學生的座號、重設密碼、查看作答統計，以及編輯國字注音、文意測驗、成語練習三種題庫。
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/teacher.js"></script>
+</body>
+</html>

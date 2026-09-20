@@ -432,6 +432,21 @@
   }
 
   window.resetQuiz = resetQuiz;
+
+  /* ---------- 作答上雲（首頁已處理登入） ---------- */
+  function initAttemptUpload() {
+    if (window.ExamCloud && window.ExamCloud.studentLoggedIn()) {
+      syncWrongBook();
+    }
+  }
+  async function syncWrongBook() {
+    if (!window.ExamCloud || !window.ExamCloud.studentLoggedIn()) return;
+    try { wrongItems = await window.ExamCloud.mergeWrongCloud(wrongItems); } catch (e) { console.warn("錯題本同步失敗：", e.message); }
+  }
+  async function uploadAttempt(item) {
+    if (!window.ExamCloud || !window.ExamCloud.studentLoggedIn()) return;
+    try { await window.ExamCloud.pushAttempt(item); } catch (e) { console.warn("作答上傳失敗：", e.message); }
+  }
   window.backToSetup = backToSetup;
 
   function boot() {
@@ -440,9 +455,10 @@
       window.ExamCloud.hydrateLocalFromCloud()
         .then(() => { loadBank(); })
         .catch(() => { loadBank(); })
-        .finally(init);
+        .finally(() => { if (window.ExamCloud) window.ExamCloud.renderStudentBar(); init(); });
     } else {
-      init();
+      if (window.ExamCloud) window.ExamCloud.renderStudentBar();
+      initAttemptUpload(); init();
     }
   }
 

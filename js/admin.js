@@ -106,14 +106,32 @@
   }
 
   /* ---------- 登入 ---------- */
-  function doLogin() {
-    const u = $("login-user").value.trim();
-    const p = $("login-pass").value;
-    if (u === ADMIN_CONFIG.username && p === ADMIN_CONFIG.password) {
+  async function doLogin() {
+    const username = $("login-username").value.trim();
+    const password = $("login-password").value;
+    if (!username || !password) {
+      $("login-error").textContent = "❌ 請輸入帳號與密碼";
+      return;
+    }
+    const apiBase = window.APP_CONFIG && window.APP_CONFIG.apiBase ? window.APP_CONFIG.apiBase.replace(/\/+$/, "") : "";
+    if (!apiBase) {
+      $("login-error").textContent = "❌ 尚未設定雲端 API 網址（請檢查 js/config.js 的 apiBase）";
+      return;
+    }
+    try {
+      const res = await fetch(apiBase + "/api/teacher/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+      localStorage.setItem("exam_teacher_token", data.token);
       localStorage.setItem(LOGIN_KEY, "1");
+      localStorage.setItem("exam_teacher_info", JSON.stringify(data.teacher));
       showAdmin();
-    } else {
-      $("login-error").textContent = "❌ 帳號或密碼錯誤，請再試一次。";
+    } catch (e) {
+      $("login-error").textContent = "❌ " + e.message;
     }
   }
 
@@ -140,6 +158,12 @@
   function showAdmin() {
     $("login-screen").classList.add("hidden");
     $("admin-screen").classList.remove("hidden");
+    $("logout-btn").style.display = "inline-block";
+    const teacherInfo = JSON.parse(localStorage.getItem("exam_teacher_info") || "{}");
+    if (teacherInfo.className) {
+      $("teacher-class-badge").textContent = "📚 " + teacherInfo.className;
+      $("teacher-class-badge").style.display = "inline";
+    }
     renderLessonSelect();
     renderBatchLessonSelect();
     renderContentLessonSelect();
@@ -148,14 +172,34 @@
   }
 
   function checkLogin() {
-    const logged = localStorage.getItem(LOGIN_KEY) === "1";
-    if (logged) {
+    const token = localStorage.getItem("exam_teacher_token");
+    if (token) {
       showAdmin();
-      $("login-user").disabled = true;
-      $("login-pass").disabled = true;
     } else {
-      $("login-user").focus();
+      $("login-username").focus();
     }
+  }
+
+  function doLogout() {
+    const token = localStorage.getItem("exam_teacher_token");
+    if (token) {
+      const apiBase = window.APP_CONFIG && window.APP_CONFIG.apiBase ? window.APP_CONFIG.apiBase.replace(/\/+$/, "") : "";
+      fetch(apiBase + "/api/teacher/logout", {
+        method: "POST",
+        headers: { "x-teacher-token": token }
+      }).catch(() => {});
+    }
+    localStorage.removeItem("exam_teacher_token");
+    localStorage.removeItem(LOGIN_KEY);
+    localStorage.removeItem("exam_teacher_info");
+    ExamCloud.setTeacherToken("");
+    $("login-username").value = "";
+    $("login-password").value = "";
+    $("login-error").textContent = "";
+    $("logout-btn").style.display = "none";
+    $("admin-screen").classList.add("hidden");
+    $("login-screen").classList.remove("hidden");
+    $("login-username").focus();
   }
 
   /* ---------- 頁籤切換 ---------- */
@@ -166,6 +210,7 @@
     $("tab-batch").classList.toggle("hidden", tab !== "batch");
     $("tab-content").classList.toggle("hidden", tab !== "content");
     $("tab-idiom").classList.toggle("hidden", tab !== "idiom");
+    $("tab-students").classList.toggle("hidden", tab !== "students");
   }
 
   /* ---------- 課次管理 ---------- */
@@ -1459,7 +1504,10 @@
   /* ---------- 事件綁定 ---------- */
   function bind() {
     $("login-btn").addEventListener("click", doLogin);
-    $("login-pass").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+    $("login-cancel").addEventListener("click", () => { window.location.href = "index.html"; });
+    $("logout-btn").addEventListener("click", doLogout);
+    $("login-password").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+    $("login-username").addEventListener("keydown", (e) => { if (e.key === "Enter") $("login-password").focus(); });
     $("add-lesson-btn").addEventListener("click", addLesson);
     $("lesson-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addLesson(); });
     $("lesson-select").addEventListener("change", renderWordRows);
@@ -1515,6 +1563,246 @@
     document.querySelectorAll(".tabbar .chip").forEach((chip) => {
       chip.addEventListener("click", () => switchTab(chip.dataset.tab));
     });
+
+    /* ---------- 學生管理 ---------- */
+    let excelStudentPreview = []; // 暫存 Excel 預覽資料
+
+    function parseExcelStudents(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const buf = e.target.result;
+          const wb = XLSX.read(buf, { type: "array" });
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+          if (rows.length < 2) {
+            alert("Excel 檔案沒有資料（至少需要標題列 + 一筆資料）");
+            return;
+          }
+          // 自動偵測標題行（含「座號」或「座位」或「seat」的列）
+          const headerRow = rows[0];
+          const idxSeat = headerRow.findIndex(h => String(h).includes("座號") || String(h).includes("座位") || String(h).toLowerCase() === "seat");
+          const idxName = headerRow.findIndex(h => String(h).includes("姓名") || String(h).includes("名字") || String(h).toLowerCase() === "name");
+          const idxPass = headerRow.findIndex(h => String(h).includes("密碼") || String(h).toLowerCase() === "password");
+
+          excelStudentPreview = [];
+          for (let i = 1; i < rows.length; i++) {
+            const r = rows[i];
+            const seat = String(r[idxSeat >= 0 ? idxSeat : 0]).trim();
+            const name = String(r[idxName >= 0 ? idxName : 1]).trim();
+            const password = idxPass >= 0 ? String(r[idxPass]).trim() : "";
+            if (!seat || !name) continue;
+            excelStudentPreview.push({ seat, name, password });
+          }
+          renderExcelPreview();
+        } catch (err) {
+          alert("讀取 Excel 失敗：" + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderExcelPreview() {
+      const tbody = $("excel-preview-tbody");
+      const defaultPass = $("default-password").value.trim();
+      tbody.innerHTML = "";
+      excelStudentPreview.forEach((s) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${s.seat}</td><td>${s.name}</td><td>${s.password || defaultPass || "（使用統一密碼）"}</td>`;
+        tbody.appendChild(tr);
+      });
+      $("excel-preview-count").textContent = `預覽 ${excelStudentPreview.length} 位`;
+      $("excel-preview-wrap").classList.remove("hidden");
+    }
+
+    async function createStudents() {
+      const token = ExamCloud.getTeacherToken();
+      if (!token) { alert("請先登入"); return; }
+      const text = $("student-list-text").value.trim();
+      const defaultPass = $("default-password").value.trim();
+      let students;
+      if (excelStudentPreview.length > 0) {
+        students = excelStudentPreview.map(s => ({
+          seat: s.seat,
+          name: s.name,
+          password: s.password || defaultPass
+        }));
+        excelStudentPreview = [];
+        $("excel-preview-wrap").classList.add("hidden");
+        $("excel-preview-count").textContent = "";
+        $("student-excel-file").value = "";
+      } else if (!text) {
+        $("student-create-msg").textContent = "請輸入名單或匯入 Excel";
+        return;
+      } else {
+        students = text.split(/\n/).map(l => {
+          const parts = l.split(/[,，\t]+/);
+          return { seat: parts[0] && parts[0].trim(), name: parts[1] && parts[1].trim(), password: parts[2] && parts[2].trim() || defaultPass };
+        }).filter(s => s.seat);
+      }
+      if (!students.length) { $("student-create-msg").textContent = "無有效資料"; return; }
+      try {
+        const res = await fetch(ExamCloud.apiBase() + "/api/students", {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: "Bearer " + token },
+          body: JSON.stringify({ students })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+        $("student-create-msg").textContent = "成功建檔 " + data.imported + " 位";
+        loadStudents();
+      } catch (e) {
+        $("student-create-msg").textContent = "失敗：" + e.message;
+      }
+    }
+
+    async function loadStudents() {
+      const token = ExamCloud.getTeacherToken();
+      if (!token) { alert("請先登入"); return; }
+      try {
+        const res = await fetch(ExamCloud.apiBase() + "/api/students", {
+          headers: { authorization: "Bearer " + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+        renderStudents(data.students);
+      } catch (e) {
+        $("student-count").textContent = "載入失敗：" + e.message;
+      }
+    }
+
+    function renderStudents(students) {
+      const tbody = $("students-tbody");
+      tbody.innerHTML = "";
+      $("student-count").textContent = students ? students.length + " 位" : "0 位";
+      if (!students) return;
+      students.forEach((s, i) => {
+        const rate = s.total > 0 ? Math.round(s.correct / s.total * 100) + "%" : "-";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><input type="checkbox" class="student-check" data-seat="${s.seat}"></td>
+          <td>${s.seat}</td>
+          <td>${s.name}</td>
+          <td>${s.total || 0}</td>
+          <td>${s.correct || 0}</td>
+          <td>${rate}</td>
+          <td>
+            <button class="btn btn-sm btn-gray reset-btn" data-seat="${s.seat}">重設密碼</button>
+            <button class="btn btn-sm btn-red delete-btn" data-seat="${s.seat}">刪除</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      // 綁定重設密碼按鈕
+      tbody.querySelectorAll(".reset-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const seat = btn.dataset.seat;
+          const pass = prompt("輸入新密碼：");
+          if (!pass) return;
+          resetPassword(seat, pass);
+        });
+      });
+      // 綁定刪除按鈕
+      tbody.querySelectorAll(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (!confirm("確認刪除座號 " + btn.dataset.seat + "？")) return;
+          deleteStudent(btn.dataset.seat);
+        });
+      });
+    }
+
+
+    async function resetPassword(seat, password) {
+      const token = ExamCloud.getTeacherToken();
+      if (!token) return;
+      try {
+        const res = await fetch(ExamCloud.apiBase() + "/api/students/password", {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: "Bearer " + token },
+          body: JSON.stringify({ seat, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        alert("已重設 " + seat + " 的密碼");
+      } catch (e) {
+        alert("重設失敗：" + e.message);
+      }
+    }
+
+    async function deleteStudent(seat) {
+      const token = ExamCloud.getTeacherToken();
+      if (!token) return;
+      try {
+        const res = await fetch(ExamCloud.apiBase() + "/api/students", {
+          method: "DELETE",
+          headers: { "content-type": "application/json", authorization: "Bearer " + token },
+          body: JSON.stringify({ seats: [seat] })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        loadStudents();
+      } catch (e) {
+        alert("刪除失敗：" + e.message);
+      }
+    }
+
+    async function deleteSelected() {
+      const checks = document.querySelectorAll(".student-check:checked");
+      if (!checks.length) { alert("請勾選要刪除的學生"); return; }
+      if (!confirm("確認刪除「" + Array.from(checks).map(c => c.dataset.seat).join("、") + "」？")) return;
+      const token = ExamCloud.getTeacherToken();
+      if (!token) return;
+      const seats = Array.from(checks).map(c => c.dataset.seat);
+      try {
+        const res = await fetch(ExamCloud.apiBase() + "/api/students", {
+          method: "DELETE",
+          headers: { "content-type": "application/json", authorization: "Bearer " + token },
+          body: JSON.stringify({ seats })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        $("delete-msg").textContent = "已刪除 " + seats.length + " 位";
+        loadStudents();
+      } catch (e) {
+        $("delete-msg").textContent = "失敗：" + e.message;
+      }
+    }
+
+    async function loadStats() {
+      const token = ExamCloud.getTeacherToken();
+      if (!token) { alert("請先登入"); return; }
+      try {
+        const res = await fetch(ExamCloud.apiBase() + "/api/stats", {
+          headers: { authorization: "Bearer " + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+        renderStats(data.stats);
+      } catch (e) {
+        alert("統計載入失敗：" + e.message);
+      }
+    }
+
+    function renderStats(stats) {
+      const tbody = $("stats-tbody");
+      tbody.innerHTML = "";
+      $("stats-table").style.display = stats && stats.length ? "table" : "none";
+      if (!stats) return;
+      stats.forEach(s => {
+        const rate = s.total > 0 ? Math.round(s.correct / s.total * 100) + "%" : "-";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${s.bank}</td><td>${s.lesson}</td><td>${s.mode}</td><td>${s.total}</td><td>${s.correct}</td><td>${rate}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    $("batch-create-btn").addEventListener("click", createStudents);
+    $("student-excel-file").addEventListener("change", (e) => {
+      if (e.target.files.length > 0) parseExcelStudents(e.target.files[0]);
+    });
+    $("load-students-btn").addEventListener("click", loadStudents);
+    $("delete-selected-btn").addEventListener("click", deleteSelected);
+    $("load-stats-btn").addEventListener("click", loadStats);
     $("batch-run-btn").addEventListener("click", () => {
       const raw = $("batch-text").value;
       const texts = [...new Set(raw.split(/[\s、，,；;]+/).map((s) => s.trim()).filter((s) => s.length >= 1))];
@@ -1532,4 +1820,6 @@
     cloudInitUI();
     checkLogin();
   });
+
 })();
+
