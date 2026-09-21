@@ -3,53 +3,69 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>老師登入 - 國語月考複習樂園</title>
+<title>老師首頁 - 國語月考複習樂園</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="quiz-header">
-    <a class="back" href="index.html">⬅ 回首頁</a>
-    <h1>🧑‍🏫 老師登入</h1>
+    <h1>🧑‍🏫 老師首頁</h1>
+    <span class="header-mascot">
+      <span id="teacher-class-badge" style="display:none;margin-right:8px;font-size:13px;color:#555"></span>
+      <button class="btn btn-sm btn-gray" id="teacher-logout-btn" style="display:none">🚪 登出</button>
+      🧑‍🏫
+    </span>
   </header>
 
   <main class="screen screen-wide">
-    <!-- 登入畫面 -->
-    <section id="login-screen">
-      <div class="panel">
-        <h2>🔒 老師登入</h2>
-        <p class="hint">請輸入您的帳號與密碼（由系統管理員建立）。</p>
-        <div class="form-row">
-          <label>帳號</label>
-          <input type="text" id="teacher-username" placeholder="例如：wang_teacher">
-        </div>
-        <div class="form-row">
-          <label>密碼</label>
-          <input type="password" id="teacher-password" placeholder="輸入密碼">
-        </div>
-        <div class="center">
-          <button class="btn" id="teacher-login-btn">🔑 登入後台</button>
-          <button class="btn btn-gray btn-sm" id="teacher-cancel-btn">取消</button>
-        </div>
-        <p class="form-error" id="teacher-login-error"></p>
+    <div class="panel">
+      <p class="hint" id="teacher-welcome"></p>
+      <div class="center" style="margin-top:6px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
+        <button class="btn btn-green" id="go-admin-btn">🛠 進入題庫管理</button>
+        <button class="btn btn-blue" id="ranking-btn">🏆 查看全班排名</button>
+        <button class="btn" id="change-pwd-btn">🔑 修改密碼</button>
       </div>
-    </section>
+      <p class="hint" style="margin-top:14px">
+        進入題庫管理後，您可以管理本班學生的座號、重設密碼、查看作答統計，以及編輯國字注音、文意測驗、成語練習三種題庫。
+      </p>
+    </div>
 
-    <!-- 後台主畫面（登入後顯示） -->
-    <section id="dashboard-screen" class="hidden">
-      <div class="panel">
-        <p class="hint" id="teacher-welcome"></p>
+    <!-- 排名彈窗 -->
+    <div class="login-pop hidden" id="ranking-pop">
+      <div class="panel" style="max-width:400px">
+        <h2>🏆 本班答對題數排名</h2>
+        <table class="word-table" style="margin-top:12px">
+          <thead>
+            <tr><th>排名</th><th>座號</th><th>答對數</th><th>總題數</th></tr>
+          </thead>
+          <tbody id="ranking-tbody"></tbody>
+        </table>
         <div class="center" style="margin-top:12px">
-          <button class="btn btn-green" id="go-admin-btn">🛠 進入題庫管理</button>
-          <button class="btn btn-gray btn-sm" id="teacher-logout-btn">🚪 登出</button>
+          <button class="btn btn-gray btn-sm" id="ranking-close">關閉</button>
+          <button class="btn btn-blue btn-sm" id="ranking-refresh">重新整理</button>
         </div>
-        <p class="hint" style="margin-top:12px">
-          進入後台後，您可以管理本班學生的座號、重設密碼、查看作答統計，以及編輯國字注音、文意測驗、成語練習三種題庫。
-        </p>
+        <p class="hint" id="ranking-msg" style="margin-top:8px"></p>
       </div>
-    </section>
+    </div>
+
+    <!-- 修改密碼彈窗 -->
+    <div class="login-pop hidden" id="change-pwd-pop">
+      <div class="panel" style="max-width:360px">
+        <h2>🔑 修改密碼</h2>
+        <div class="form-row"><label>舊密碼</label><input type="password" id="old-password"></div>
+        <div class="form-row"><label>新密碼</label><input type="password" id="new-password"></div>
+        <div class="form-row"><label>確認新密碼</label><input type="password" id="confirm-password"></div>
+        <div class="center">
+          <button class="btn btn-blue" id="submit-change-btn">確認修改</button>
+          <button class="btn btn-gray btn-sm" id="cancel-change-btn">取消</button>
+        </div>
+        <p class="hint" id="change-pwd-msg" style="margin-top:8px"></p>
+      </div>
+    </div>
   </main>
 
   <script src="js/config.js"></script>
+  <script src="js/app-config.js"></script>
+  <script src="js/cloud.js"></script>
   <script src="js/teacher.js"></script>
 </body>
 </html>

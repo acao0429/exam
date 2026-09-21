@@ -19,27 +19,6 @@
 
   <main class="screen screen-wide">
 
-    <!-- 登入畫面 -->
-    <section id="login-screen">
-      <div class="panel">
-        <h2>🔒 老師登入</h2>
-        <p class="hint">請輸入您的老師帳號與密碼（由系統管理員建立）。</p>
-        <div class="form-row">
-          <label>帳號</label>
-          <input type="text" id="login-username" placeholder="例如：wang_teacher">
-        </div>
-        <div class="form-row">
-          <label>密碼</label>
-          <input type="password" id="login-password" placeholder="輸入密碼">
-        </div>
-        <div class="center">
-          <button class="btn" id="login-btn">🔑 登入後台</button>
-          <button class="btn btn-gray btn-sm" id="login-cancel">取消</button>
-        </div>
-        <p class="form-error" id="login-error"></p>
-      </div>
-    </section>
-
     <!-- 管理畫面 -->
     <section id="admin-screen" class="hidden">
       <div class="panel tabbar">
@@ -155,11 +134,13 @@
               <label>✨ AI 自動出題（選填）</label>
               <div class="inline-row">
                 <select id="ai-provider">
+                  <option value="nvidia">NVIDIA NIM（免費額度）</option>
+                  <option value="agnes">Agnes AI（免費額度）</option>
                   <option value="gemini">Gemini（免費額度）</option>
                   <option value="groq">Groq（免費額度）</option>
                   <option value="openai">OpenAI</option>
                 </select>
-                <input type="password" class="admin-input" id="ai-key" placeholder="貼上 API 金鑰（三家可各存一組，切換自動帶入）">
+                <input type="password" class="admin-input" id="ai-key" placeholder="貼上 API 金鑰（每家可各存一組，切換自動帶入）">
               </div>
             </div>
             <div class="form-row" style="margin-bottom:6px">
@@ -169,7 +150,7 @@
                 <button class="btn btn-gray btn-sm" id="ai-test-btn">🔌 測試連線</button>
               </div>
             </div>
-            <p class="hint">Gemini、Groq、OpenAI 的金鑰會分開存放：先選好提供者 → 貼金鑰 → 按「存金鑰」，切換提供者時自動帶入，不用重貼。沒金鑰時自動改用「教育部辭典」免費規則式出題（需連網）。</p>
+            <p class="hint">NVIDIA NIM、Agnes AI、Gemini、Groq、OpenAI 的金鑰會分開存放、每個可獨立設定：先選好提供者 → 貼金鑰 → 按「存金鑰」，切換提供者時自動帶入。金鑰儲存在雲端（老師帳號專用、只存伺服器，黃金鑰不會出現在瀏覽器）。沒金鑰時自動改用「教育部辭典」免費規則式出題（需連網）。</p>
             <div class="center" style="margin-bottom:14px">
               <button class="btn btn-blue" id="gen-btn">✨ 自動出題</button>
             </div>
@@ -265,9 +246,8 @@
         <div class="panel" style="margin-top:16px">
           <h2>☁️ 雲端同步（雲端資料庫）</h2>
           <p class="hint">把題庫同步到雲端後，學生開練習頁會自動抓最新題庫（抓不到時仍用本機）。<br>
-          首次使用：在 <b>js/app-config.js</b> 填好 apiBase（已預填部署網址），並在下方輸入 admin token（只存在這台瀏覽器的 localStorage）。</p>
+          以目前登入的老師帳號驗證身分，不需另外輸入 token。</p>
           <div class="inline-row" style="justify-content:center; flex-wrap:wrap">
-            <input type="password" id="cloud-token" style="max-width:280px" placeholder="admin token">
             <button class="btn btn-green btn-sm" id="cloud-push-btn">☁️ 同步本機題庫到雲端</button>
             <button class="btn btn-blue btn-sm" id="cloud-pull-btn">☁️ 從雲端載入到本機</button>
           </div>

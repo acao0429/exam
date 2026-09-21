@@ -17,5 +17,6 @@ node_modules/
 .wrangler/
 worker/.dev.vars
 worker/.admin-token.txt
+worker/.admin-teacher.txt
 .dev.vars
 flags

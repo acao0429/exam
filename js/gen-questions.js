@@ -199,9 +199,15 @@
 
   /* ---------- AI 出題 ---------- */
   /* 2026 年確認有效的預設模型（官方文件），失敗時會自動輪流試 */
-  const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.7-flash"];
-  const GROQ_MODELS = ["llama-3.3-70b-versatile", "openai/gpt-oss-20b", "groq/compound-mini"];
-  const OPENAI_MODELS = ["gpt-4o-mini", "gpt-4o"];
+  const AI_PROVIDERS = {
+    gemini: { label: "Gemini", style: "gemini", base: "", models: ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.7-flash"] },
+    groq: { label: "Groq", style: "openai", base: "https://api.groq.com/openai/v1", models: ["llama-3.3-70b-versatile", "openai/gpt-oss-20b", "groq/compound-mini"] },
+    openai: { label: "OpenAI", style: "openai", base: "https://api.openai.com/v1", models: ["gpt-4o-mini", "gpt-4o"] },
+    nvidia: { label: "NVIDIA NIM", style: "openai", base: "https://integrate.api.nvidia.com/v1", models: ["meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct"] },
+    agnes: { label: "Agnes AI", style: "openai", base: "https://apihub.agnes-ai.com/v1", models: ["agnes-2.5-flash", "agnes-2.0-flash", "agnes-1.5-flash"] }
+  };
+
+  const AI_SYSTEM = "你是一位國小國語老師。";
 
   async function tryModels(models, fn) {
     let lastErr = null;
@@ -215,12 +221,35 @@
     throw lastErr;
   }
 
+  /* 伺服器端代理：金鑰在 D1，由 Worker 呼叫 AI，前端不持有金鑰 */
+  async function proxyChat(provider, model, prompt, temperature) {
+    const text = await window.ExamCloud.aiChat(provider, model || "", prompt, AI_SYSTEM, temperature);
+    return text;
+  }
+
   async function aiGenerate(item, cfg) {
-    if (!cfg || !cfg.key) return [];
+    if (!cfg || !cfg.provider) return [];
+    const prov = AI_PROVIDERS[cfg.provider];
+    if (!prov) return [];
     const users = cfg.model ? [cfg.model] : [];
-    if (cfg.provider === "groq") return tryModels(users.concat(GROQ_MODELS), (m) => aiOpenAICompat("https://api.groq.com/openai/v1", m, item, cfg));
-    if (cfg.provider === "openai") return tryModels(users.concat(OPENAI_MODELS), (m) => aiOpenAICompat("https://api.openai.com/v1", m, item, cfg));
-    return tryModels(users.concat(GEMINI_MODELS), (m) => aiGemini(item, cfg, m)); // 預設 gemini
+    const prompt = buildPrompt(item);
+
+    /* 伺服器端代理優先（金鑰在 D1） */
+    if (cfg.hasCloud && window.ExamCloud && window.ExamCloud.aiProxyEnabled && window.ExamCloud.aiProxyEnabled()) {
+      return tryModels(users.concat(prov.models), async (m) => {
+        const text = await proxyChat(cfg.provider, m, prompt, 0.7);
+        return normalizeAI(extractJsonArray(text || ""));
+      });
+    }
+
+    /* 沒有雲端（本機只有金鑰）時，沿用舊的直接呼叫 */
+    if (cfg.key && prov.style === "gemini") {
+      return tryModels(users.concat(prov.models), (m) => aiGemini(prov, m, cfg, prompt));
+    }
+    if (cfg.key) {
+      return tryModels(users.concat(prov.models), (m) => aiOpenAICompat(prov.base, m, cfg, prompt));
+    }
+    return [];
   }
 
   function buildPrompt(item) {
@@ -276,11 +305,25 @@
 
   /* 測試連線：給後台「測試連線」按鈕用 */
   async function testConnection(cfg) {
-    if (!cfg || !cfg.key) return { ok: false, message: "還沒貼上 API 金鑰。" };
+    if (!cfg || !cfg.provider) return { ok: false, message: "還沒選 AI 提供者。" };
+    const prov = AI_PROVIDERS[cfg.provider];
+    if (!prov) return { ok: false, message: "不支援的提供者。" };
+
+    /* 伺服器端代理測試（金鑰在 D1，不落地瀏覽器） */
+    if (cfg.hasCloud && window.ExamCloud && window.ExamCloud.aiProxyEnabled && window.ExamCloud.aiProxyEnabled()) {
+      try {
+        const r = await window.ExamCloud.aiTest(cfg.provider, cfg.model || "");
+        return { ok: true, message: "連線成功！金鑰有效（伺服器回應正常）" + (r.model ? `，模型：${r.model}` : "") + "。" };
+      } catch (e) {
+        const m = (e && e.message) || e;
+        return { ok: false, message: /找不到模型/.test(m) ? m : "測試失敗：" + m };
+      }
+    }
+
+    if (!cfg.key) return { ok: false, message: "還沒貼上 API 金鑰。" };
     try {
-      if (cfg.provider === "groq" || cfg.provider === "openai") {
-        const base = cfg.provider === "groq" ? "https://api.groq.com/openai/v1" : "https://api.openai.com/v1";
-        const resp = await fetchWithTimeout(`${base}/models`, 15000, {
+      if (prov.style === "openai") {
+        const resp = await fetchWithTimeout(`${prov.base}/models`, 15000, {
           headers: { "Authorization": `Bearer ${cfg.key}` }
         });
         if (resp.ok) return { ok: true, message: "連線成功！金鑰有效（伺服器回應正常）。" };
@@ -297,8 +340,8 @@
     }
   }
 
-  /* Groq / OpenAI（同一格式） */
-  async function aiOpenAICompat(baseURL, model, item, cfg) {
+  /* Groq / OpenAI / NVIDIA / Agnes（同一格式） */
+  async function aiOpenAICompat(baseURL, model, cfg, prompt) {
     const resp = await fetchWithTimeout(`${baseURL}/chat/completions`, 30000, {
       method: "POST",
       headers: {
@@ -308,8 +351,8 @@
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: "你是一位國小國語老師。" },
-          { role: "user", content: buildPrompt(item) }
+          { role: "system", content: AI_SYSTEM },
+          { role: "user", content: prompt }
         ],
         temperature: 0.7
       })
@@ -321,8 +364,8 @@
   }
 
   /* Gemini */
-  async function aiGemini(item, cfg, model) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  async function aiGemini(prov, model, cfg, prompt) {
+    const url = `${prov.base}/models/${encodeURIComponent(model)}:generateContent`;
     const resp = await fetchWithTimeout(url, 60000, {
       method: "POST",
       headers: {
@@ -330,7 +373,8 @@
         "x-goog-api-key": cfg.key
       },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: buildPrompt(item) }] }],
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: { parts: [{ text: AI_SYSTEM }] },
         generationConfig: { temperature: 0.7 }
       })
     });
@@ -384,7 +428,7 @@
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: "你是一位國小國語老師。" },
+          { role: "system", content: AI_SYSTEM },
           { role: "user", content: buildDefPrompt(words) }
         ],
         temperature: 0.5
@@ -396,8 +440,8 @@
     return normalizeDefs(extractJsonObject(text || "{}"), words);
   }
 
-  async function aiDefsGemini(words, cfg, model) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  async function aiDefsGemini(prov, model, words, cfg) {
+    const url = `${prov.base}/models/${encodeURIComponent(model)}:generateContent`;
     const resp = await fetchWithTimeout(url, 60000, {
       method: "POST",
       headers: {
@@ -406,6 +450,7 @@
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: buildDefPrompt(words) }] }],
+        systemInstruction: { parts: [{ text: AI_SYSTEM }] },
         generationConfig: { temperature: 0.5 }
       })
     });
@@ -421,15 +466,28 @@
     return normalizeDefs(extractJsonObject(text || "{}"), words);
   }
 
-  /* 回傳 { 語詞: 短解釋 }；沒金鑰回傳 {} */
+  /* 回傳 { 語詞: 短解釋 }；沒金鑰/沒雲端回傳 {} */
   async function aiFillDefs(words, cfg) {
-    if (!cfg || !cfg.key) return {};
+    if (!cfg || !cfg.provider) return {};
+    const prov = AI_PROVIDERS[cfg.provider];
+    if (!prov) return {};
     const unique = [...new Set(words.map((w) => String(w).trim()).filter(Boolean))];
     if (unique.length === 0) return {};
     const users = cfg.model ? [cfg.model] : [];
-    if (cfg.provider === "groq") return tryModels(users.concat(GROQ_MODELS), (m) => aiDefsOpenAICompat("https://api.groq.com/openai/v1", m, unique, cfg));
-    if (cfg.provider === "openai") return tryModels(users.concat(OPENAI_MODELS), (m) => aiDefsOpenAICompat("https://api.openai.com/v1", m, unique, cfg));
-    return tryModels(users.concat(GEMINI_MODELS), (m) => aiDefsGemini(unique, cfg, m));
+
+    if (cfg.hasCloud && window.ExamCloud && window.ExamCloud.aiProxyEnabled && window.ExamCloud.aiProxyEnabled()) {
+      return tryModels(users.concat(prov.models), async (m) => {
+        const text = await proxyChat(cfg.provider, m, buildDefPrompt(unique), 0.5);
+        return normalizeDefs(extractJsonObject(text || "{}"), unique);
+      });
+    }
+    if (cfg.key && prov.style === "gemini") {
+      return tryModels(users.concat(prov.models), (m) => aiDefsGemini(prov, m, unique, cfg));
+    }
+    if (cfg.key) {
+      return tryModels(users.concat(prov.models), (m) => aiDefsOpenAICompat(prov.base, m, unique, cfg));
+    }
+    return {};
   }
 
   window.GenQuestions = { aiGenerate, ruleGenerate, testConnection, aiFillDefs };

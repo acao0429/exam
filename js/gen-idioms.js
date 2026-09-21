@@ -4,9 +4,9 @@
    1. aiFillIdioms  ：針對「填了成語但缺釋義/注音/近反義」的成語，AI 一次補齊
    2. aiSuggest     ：給一個主題（例如課名），AI 建議一批適合國小的成語
 
-   跟文意測驗共用同一套金鑰設定（localStorage：exam_ai_provider /
-   exam_ai_key_<provider> / exam_ai_model_<provider>）。
-   金鑰只存在老師這台電腦，任何匯出都不含金鑰。
+   跟文意測驗共用同一套 AI 設定（provider / model 一致）。
+   2026/9 起改為「伺服器端代理」：金鑰存在 D1，由 Worker 呼叫 AI，
+   瀏覽器不持有金鑰；雲端未啟用時退回本機金鑰直連。
    ============================================================ */
 
 (function () {
@@ -23,9 +23,15 @@
   }
 
   /* 2026 年確認有效的預設模型（與 gen-questions.js 相同） */
-  const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.7-flash"];
-  const GROQ_MODELS = ["llama-3.3-70b-versatile", "openai/gpt-oss-20b", "groq/compound-mini"];
-  const OPENAI_MODELS = ["gpt-4o-mini", "gpt-4o"];
+  const AI_PROVIDERS = {
+    gemini: { label: "Gemini", style: "gemini", base: "https://generativelanguage.googleapis.com/v1beta", models: ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.7-flash"] },
+    groq: { label: "Groq", style: "openai", base: "https://api.groq.com/openai/v1", models: ["llama-3.3-70b-versatile", "openai/gpt-oss-20b", "groq/compound-mini"] },
+    openai: { label: "OpenAI", style: "openai", base: "https://api.openai.com/v1", models: ["gpt-4o-mini", "gpt-4o"] },
+    nvidia: { label: "NVIDIA NIM", style: "openai", base: "https://integrate.api.nvidia.com/v1", models: ["meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct"] },
+    agnes: { label: "Agnes AI", style: "openai", base: "https://apihub.agnes-ai.com/v1", models: ["agnes-2.5-flash", "agnes-2.0-flash", "agnes-1.5-flash"] }
+  };
+
+  const AI_SYSTEM = "你是一位國小國語老師。";
 
   async function tryModels(models, fn) {
     let lastErr = null;
@@ -39,10 +45,19 @@
     throw lastErr;
   }
 
-  function aiProvider(cfg, gemini, openaiCompat) {
-    if (cfg.provider === "groq") return tryModels((cfg.model ? [cfg.model] : []).concat(GROQ_MODELS), (m) => openaiCompat("https://api.groq.com/openai/v1", m, cfg));
-    if (cfg.provider === "openai") return tryModels((cfg.model ? [cfg.model] : []).concat(OPENAI_MODELS), (m) => openaiCompat("https://api.openai.com/v1", m, cfg));
-    return tryModels((cfg.model ? [cfg.model] : []).concat(GEMINI_MODELS), (m) => gemini(m, cfg));
+  function aiProvider(cfg, fn) {
+    if (!cfg || !cfg.provider) return Promise.resolve([]);
+    const prov = AI_PROVIDERS[cfg.provider];
+    if (!prov) return Promise.resolve([]);
+    const users = cfg.model ? [cfg.model] : [];
+
+    /* 伺服器端代理優先（金鑰在 D1） */
+    if (cfg.hasCloud && window.ExamCloud && window.ExamCloud.aiProxyEnabled && window.ExamCloud.aiProxyEnabled()) {
+      return tryModels(users.concat(prov.models), (m) => fn("proxy", m, prov));
+    }
+    if (cfg.key && prov.style === "gemini") return tryModels(users.concat(prov.models), (m) => fn("gemini", m, prov));
+    if (cfg.key) return tryModels(users.concat(prov.models), (m) => fn("openai", m, prov));
+    return Promise.resolve([]);
   }
 
   function buildPrompt(items, task) {
@@ -84,8 +99,8 @@
     return out;
   }
 
-  async function aiOpenAICompat(baseURL, model, cfg, payload) {
-    const resp = await fetchWithTimeout(`${baseURL}/chat/completions`, 60000, {
+  async function aiOpenAICompat(prov, model, cfg, payload) {
+    const resp = await fetchWithTimeout(`${prov.base}/chat/completions`, 60000, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -94,7 +109,7 @@
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: "你是一位國小國語老師。" },
+          { role: "system", content: AI_SYSTEM },
           { role: "user", content: payload }
         ],
         temperature: 0.6
@@ -106,8 +121,8 @@
     return normalizeIdioms(extractJsonArray(text || ""));
   }
 
-  async function aiGemini(model, cfg, payload) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  async function aiGemini(prov, model, cfg, payload) {
+    const url = `${prov.base}/models/${encodeURIComponent(model)}:generateContent`;
     const resp = await fetchWithTimeout(url, 60000, {
       method: "POST",
       headers: {
@@ -116,6 +131,7 @@
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: payload }] }],
+        systemInstruction: { parts: [{ text: AI_SYSTEM }] },
         generationConfig: { temperature: 0.6 }
       })
     });
@@ -144,7 +160,7 @@
 
   /* 針對一批「只填了成語」的詞條，AI 補釋義/注音/近反義 */
   function aiFillIdioms(items, cfg) {
-    if (!cfg || !cfg.key) return Promise.resolve([]);
+    if (!cfg || !cfg.provider) return Promise.resolve([]);
     const list = items.map((it) => (typeof it === "string" ? it : it.idiom)).filter(Boolean);
     const unique = [...new Set(list)];
     if (unique.length === 0) return Promise.resolve([]);
@@ -152,25 +168,31 @@
       "以下是成語清單，請為每一個成語補齊資料：\n" + unique.join("、"),
       "請依照成語清單逐條輸出 JSON 陣列，不要把清單裡沒有的成語混進去。"
     );
-    return aiProvider(
-      cfg,
-      (m) => aiGemini(m, cfg, payload),
-      (base, m) => aiOpenAICompat(base, m, cfg, payload)
-    );
+    return aiProvider(cfg, async (mode, m, prov) => {
+      if (mode === "proxy") {
+        const text = await window.ExamCloud.aiChat(cfg.provider, m || "", payload, AI_SYSTEM, 0.6);
+        return normalizeIdioms(extractJsonArray(text || ""));
+      }
+      if (mode === "gemini") return aiGemini(prov, m, cfg, payload);
+      return aiOpenAICompat(prov, m, cfg, payload);
+    });
   }
 
   /* 給主題（課名/關鍵字），AI 建議一批成語（可用於「AI 依課名補成語」） */
   function aiSuggest(topic, cfg) {
-    if (!cfg || !cfg.key) return Promise.resolve([]);
+    if (!cfg || !cfg.provider) return Promise.resolve([]);
     const payload = buildPrompt(
       `主題：${topic}\n請建議 6 個適合國小學生的常見四字成語，要和「${topic}」的意思或情境相關。`,
       "請選常見、適合國小的成語，釋義要簡短好懂。"
     );
-    return aiProvider(
-      cfg,
-      (m) => aiGemini(m, cfg, payload),
-      (base, m) => aiOpenAICompat(base, m, cfg, payload)
-    );
+    return aiProvider(cfg, async (mode, m, prov) => {
+      if (mode === "proxy") {
+        const text = await window.ExamCloud.aiChat(cfg.provider, m || "", payload, AI_SYSTEM, 0.6);
+        return normalizeIdioms(extractJsonArray(text || ""));
+      }
+      if (mode === "gemini") return aiGemini(prov, m, cfg, payload);
+      return aiOpenAICompat(prov, m, cfg, payload);
+    });
   }
 
   window.GenIdioms = { aiFillIdioms, aiSuggest };

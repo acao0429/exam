@@ -11,48 +11,11 @@
     <div class="topbar-inner">
       <span class="topbar-title">🦉 國語月考複習樂園</span>
       <div class="topbar-buttons">
-        <button class="topbar-login" id="top-student-btn">👨‍🎓 學生登入</button>
         <span id="student-welcome-text" style="display:none; font-weight:bold; margin-right:8px"></span>
         <button class="topbar-login" id="top-ranking-btn" style="display:none">🏆 排名</button>
-        <button class="topbar-login" id="change-student-password-btn-top" style="display:none">🔑 修改密碼</button>
+        <button class="topbar-login" id="change-student-password-btn" style="display:none">🔑 修改密碼</button>
         <button class="topbar-login" id="student-logout-btn" style="display:none">🚪 登出</button>
-        <a class="topbar-login" href="teacher.html" id="top-teacher-btn" style="text-decoration:none;cursor:pointer">🧑‍🏫 老師登入</a>
       </div>
-    </div>
-  </div>
-
-  <!-- 學生登入彈窗 -->
-  <div class="login-pop hidden" id="student-login-pop">
-    <div class="panel">
-      <h2>👨‍🎓 學生登入</h2>
-      <div class="form-row">
-        <label>座號</label>
-        <input type="text" id="student-seat" placeholder="例如：01">
-      </div>
-      <div class="form-row">
-        <label>密碼</label>
-        <input type="password" id="student-password" placeholder="輸入密碼">
-      </div>
-      <div class="center">
-        <button class="btn btn-blue" id="student-login-btn">登入</button>
-        <button class="btn btn-gray btn-sm" id="student-login-cancel">取消</button>
-      </div>
-      <p class="form-error" id="student-login-error"></p>
-      <div class="center" style="margin-top:12px">
-        <button class="btn btn-sm" id="change-student-password-btn" style="display:none">🔑 修改密碼</button>
-      </div>
-      <div id="change-password-section" class="hidden" style="margin-top:12px; border-top:1px solid #ccc; padding-top:12px">
-        <p class="hint">修改密碼</p>
-        <div class="form-row"><label>舊密碼</label><input type="password" id="old-password"></div>
-        <div class="form-row"><label>新密碼</label><input type="password" id="new-password"></div>
-        <div class="form-row"><label>確認新密碼</label><input type="password" id="confirm-password"></div>
-        <div class="center">
-          <button class="btn btn-sm btn-green" id="submit-change-btn">確認修改</button>
-          <button class="btn btn-sm btn-gray" id="cancel-change-btn">取消</button>
-        </div>
-        <p class="hint" id="change-pwd-msg"></p>
-      </div>
-      <p class="hint" id="student-welcome" style="margin-top:8px;font-weight:bold"></p>
     </div>
   </div>
 
@@ -71,6 +34,21 @@
         <button class="btn btn-blue btn-sm" id="ranking-refresh">重新整理</button>
       </div>
       <p class="hint" id="ranking-msg" style="margin-top:8px"></p>
+    </div>
+  </div>
+
+  <!-- 修改密碼彈窗 -->
+  <div class="login-pop hidden" id="change-pwd-pop">
+    <div class="panel" style="max-width:360px">
+      <h2>🔑 修改密碼</h2>
+      <div class="form-row"><label>舊密碼</label><input type="password" id="old-password"></div>
+      <div class="form-row"><label>新密碼</label><input type="password" id="new-password"></div>
+      <div class="form-row"><label>確認新密碼</label><input type="password" id="confirm-password"></div>
+      <div class="center">
+        <button class="btn btn-blue" id="submit-change-btn">確認修改</button>
+        <button class="btn btn-gray btn-sm" id="cancel-change-btn">取消</button>
+      </div>
+      <p class="hint" id="change-pwd-msg" style="margin-top:8px"></p>
     </div>
   </div>
 
@@ -103,9 +81,11 @@
     </a>
   </main>
 
-  <footer class="credit">給老師：點右上角「🧑‍🏫 老師登入」即可用網頁介面管理題庫與學生。</footer>
+  <footer class="credit">給老師：請先到 <a href="login.html" style="color:inherit">登入頁</a> 以老師帳號登入。</footer>
 
   <script src="js/config.js"></script>
+  <script src="js/app-config.js"></script>
+  <script src="js/cloud.js"></script>
   <script src="js/home.js"></script>
 </body>
 </html>

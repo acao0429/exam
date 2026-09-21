@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登入 - 國語月考複習樂園</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="home">
+  <main class="screen screen-wide" style="display:flex; align-items:center; justify-content:center; min-height:100vh">
+    <div class="panel" style="max-width:380px; width:100%; padding:28px">
+      <div class="center"><span style="font-size:48px">🦉</span></div>
+      <h2 class="center">國語月考複習樂園</h2>
+      <p class="hint center" style="margin-bottom:14px">請先登入，才能開始使用。</p>
+
+      <div class="tabbar" style="justify-content:center">
+        <button class="chip selected" id="tab-student">👨‍🎓 學生登入</button>
+        <button class="chip" id="tab-teacher">🧑‍🏫 老師登入</button>
+      </div>
+
+      <div id="student-form">
+        <div class="form-row" style="margin-top:14px">
+          <label>座號</label>
+          <input type="text" id="login-seat" placeholder="例如：01" autocomplete="username">
+        </div>
+        <div class="form-row">
+          <label>密碼</label>
+          <input type="password" id="login-password" placeholder="輸入密碼" autocomplete="current-password">
+        </div>
+        <div class="center">
+          <button class="btn btn-blue" id="student-login-btn">🔑 登入</button>
+        </div>
+        <p class="hint center" style="margin-top:10px">學生帳號由老師建立，請向老師索取座號與初始密碼。</p>
+      </div>
+
+      <div id="teacher-form" class="hidden">
+        <div class="form-row" style="margin-top:14px">
+          <label>帳號</label>
+          <input type="text" id="login-username" placeholder="老師帳號" autocomplete="username">
+        </div>
+        <div class="form-row">
+          <label>密碼</label>
+          <input type="password" id="login-teacher-password" placeholder="輸入密碼" autocomplete="current-password">
+        </div>
+        <div class="center">
+          <button class="btn btn-blue" id="teacher-login-btn">🔑 登入</button>
+        </div>
+        <p class="hint center" style="margin-top:10px">老師帳號由系統管理員建立；登入後可管理題庫與學生。</p>
+      </div>
+
+      <p class="form-error center" id="login-error"></p>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/cloud.js"></script>
+  <script src="js/login.js"></script>
+</body>
+</html>

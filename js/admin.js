@@ -105,36 +105,6 @@
     }
   }
 
-  /* ---------- 登入 ---------- */
-  async function doLogin() {
-    const username = $("login-username").value.trim();
-    const password = $("login-password").value;
-    if (!username || !password) {
-      $("login-error").textContent = "❌ 請輸入帳號與密碼";
-      return;
-    }
-    const apiBase = window.APP_CONFIG && window.APP_CONFIG.apiBase ? window.APP_CONFIG.apiBase.replace(/\/+$/, "") : "";
-    if (!apiBase) {
-      $("login-error").textContent = "❌ 尚未設定雲端 API 網址（請檢查 js/config.js 的 apiBase）";
-      return;
-    }
-    try {
-      const res = await fetch(apiBase + "/api/teacher/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
-      localStorage.setItem("exam_teacher_token", data.token);
-      localStorage.setItem(LOGIN_KEY, "1");
-      localStorage.setItem("exam_teacher_info", JSON.stringify(data.teacher));
-      showAdmin();
-    } catch (e) {
-      $("login-error").textContent = "❌ " + e.message;
-    }
-  }
-
   /* ---------- 文意測驗題庫載入 ---------- */
   function loadCBank() {
     const grouped = {};
@@ -156,7 +126,6 @@
   }
 
   function showAdmin() {
-    $("login-screen").classList.add("hidden");
     $("admin-screen").classList.remove("hidden");
     $("logout-btn").style.display = "inline-block";
     const teacherInfo = JSON.parse(localStorage.getItem("exam_teacher_info") || "{}");
@@ -173,11 +142,12 @@
 
   function checkLogin() {
     const token = localStorage.getItem("exam_teacher_token");
-    if (token) {
-      showAdmin();
-    } else {
-      $("login-username").focus();
+    if (!token) {
+      location.replace("login.html");
+      return;
     }
+    window.ExamCloud.setTeacherToken(token);
+    showAdmin();
   }
 
   function doLogout() {
@@ -192,14 +162,9 @@
     localStorage.removeItem("exam_teacher_token");
     localStorage.removeItem(LOGIN_KEY);
     localStorage.removeItem("exam_teacher_info");
-    ExamCloud.setTeacherToken("");
-    $("login-username").value = "";
-    $("login-password").value = "";
-    $("login-error").textContent = "";
+    window.ExamCloud.setTeacherToken("");
     $("logout-btn").style.display = "none";
-    $("admin-screen").classList.add("hidden");
-    $("login-screen").classList.remove("hidden");
-    $("login-username").focus();
+    location.replace("login.html");
   }
 
   /* ---------- 頁籤切換 ---------- */
@@ -442,7 +407,7 @@
   /* 批次補詞義（AI，需要後台已存的金鑰） */
   async function fillDefsAI() {
     const cfg = loadAI();
-    if (!cfg.key) { alert("還沒有 AI 金鑰：到「✨ AI 自動出題」區貼上 Gemini 或 Groq 金鑰，按「存金鑰」即可。"); return; }
+    if (!cfgHasKey(cfg)) { alert("還沒有 AI 金鑰：到「✨ AI 自動出題」區選一家提供者貼上金鑰，按「存金鑰」即可（金鑰存雲端）。"); return; }
     const rows = [...$("word-tbody").querySelectorAll("tr")];
     const words = [];
     rows.forEach((tr) => {
@@ -1161,7 +1126,7 @@
   /* 針對缺釋義/注音/近反義的成語，AI 一次補齊 */
   async function fillIdiomsAI() {
     const cfg = loadAI();
-    if (!cfg.key) { alert("還沒有 AI 金鑰：到「📖 文意測驗」頁的「✨ AI 自動出題」區貼上 Gemini 或 Groq 金鑰，按「存金鑰」即可。"); return; }
+    if (!cfgHasKey(cfg)) { alert("還沒有 AI 金鑰：到「📖 文意測驗」頁的「✨ AI 自動出題」區選一家提供者貼上金鑰，按「存金鑰」即可。"); return; }
     const rows = [...$("idiom-tbody").querySelectorAll("tr")];
     const items = [];
     rows.forEach((tr) => {
@@ -1203,7 +1168,7 @@
   /* 依課名主題，AI 一次建議 6 個成語加進表格 */
   async function suggestIdiomsAI() {
     const cfg = loadAI();
-    if (!cfg.key) { alert("還沒有 AI 金鑰：到「📖 文意測驗」頁的「✨ AI 自動出題」區貼上金鑰並按「存金鑰」。"); return; }
+    if (!cfgHasKey(cfg)) { alert("還沒有 AI 金鑰：到「📖 文意測驗」頁的「✨ AI 自動出題」區貼上金鑰並按「存金鑰」。"); return; }
     const lesson = $("idiom-lesson-select").value;
     if (!lesson) { alert("請先新增或選擇課次。"); return; }
 
@@ -1235,7 +1200,9 @@
     btn.textContent = oldText;
   }
 
-  /* ---------- AI 金鑰存取（每家各自一筆，切換就自動帶入） ---------- */
+  /* ---------- AI 設定（2026/9 起金鑰存雲端 D1，瀏覽器不留金鑰） ---------- */
+  const AI_PROXY = { enabled: false, settings: {} }; // settings[provider] = { hasKey, model }
+
   /* 舊版（2026/9 前）金鑰只存一格，自動搬移到 Gemini */
   function migrateLegaAI() {
     if (!localStorage.getItem("exam_ai_key_gemini") && localStorage.getItem("exam_ai_key")) {
@@ -1246,39 +1213,98 @@
     }
   }
 
+  /* 從雲端抓取這學期老師的 AI 設定快取（只含 hasKey/model，不含金鑰本身） */
+  async function refreshAISettings() {
+    AI_PROXY.enabled = !!(window.ExamCloud && window.ExamCloud.aiProxyEnabled && window.ExamCloud.aiProxyEnabled());
+    AI_PROXY.settings = {};
+    if (!AI_PROXY.enabled) {
+      /* 雲端沒開：沿用舊有的本機金鑰（僅供離線直連） */
+      ["gemini", "groq", "openai", "nvidia", "agnes"].forEach((p) => {
+        if (localStorage.getItem("exam_ai_key_" + p)) {
+          AI_PROXY.settings[p] = { hasKey: true, model: localStorage.getItem("exam_ai_model_" + p) || "" };
+        }
+      });
+      return;
+    }
+    try {
+      const data = await window.ExamCloud.aiSettingsGet();
+      (data.settings || []).forEach((s) => {
+        AI_PROXY.settings[s.provider] = { hasKey: !!s.hasKey, model: s.model || "" };
+      });
+    } catch (e) {
+      if (window.console) console.warn("AI 設定載入失敗：", e.message);
+    }
+  }
+
+  /* cfg = { provider, model, hasCloud, hasKey, key（離線用） } */
   function loadAI() {
     migrateLegaAI();
     const provider = localStorage.getItem("exam_ai_provider") || "gemini";
+    const st = AI_PROXY.settings[provider] || {};
+    const hasCloud = AI_PROXY.enabled;
     return {
       provider,
-      key: localStorage.getItem("exam_ai_key_" + provider) || "",
-      model: localStorage.getItem("exam_ai_model_" + provider) || ""
+      model: st.model || localStorage.getItem("exam_ai_model_" + provider) || "",
+      hasKey: hasCloud ? !!st.hasKey : !!localStorage.getItem("exam_ai_key_" + provider),
+      hasCloud,
+      key: hasCloud ? "" : (localStorage.getItem("exam_ai_key_" + provider) || "")
     };
   }
 
-  function saveAI() {
+  function cfgHasKey(cfg) { return !!(cfg && (cfg.key || cfg.hasKey)); }
+
+  async function saveAI() {
     const provider = $("ai-provider").value;
+    const apiKey = $("ai-key").value.trim();
+    const model = $("ai-model").value.trim();
+    const label = $("ai-provider").selectedOptions[0].textContent;
+
+    if (AI_PROXY.enabled) {
+      if (!apiKey) { $("gen-status").textContent = "👉 請貼上 API 金鑰，再按「存金鑰」。"; return; }
+      try {
+        await window.ExamCloud.aiSettingsSet(provider, apiKey, model);
+        AI_PROXY.settings[provider] = { hasKey: true, model };
+        $("gen-status").textContent = `💾 已把「${label}」的金鑰存到雲端（老師帳號專用）！`;
+      } catch (e) {
+        $("gen-status").textContent = "❌ 存金鑰失敗：" + e.message;
+      }
+      return;
+    }
+
+    /* 沒開雲端：只存本機（離線直連用） */
     localStorage.setItem("exam_ai_provider", provider);
-    localStorage.setItem("exam_ai_key_" + provider, $("ai-key").value.trim());
-    localStorage.setItem("exam_ai_model_" + provider, $("ai-model").value.trim());
-    $("gen-status").textContent = "💾 已存「" + $("ai-provider").selectedOptions[0].textContent + "」的金鑰！";
+    localStorage.setItem("exam_ai_key_" + provider, apiKey || "");
+    localStorage.setItem("exam_ai_model_" + provider, model || "");
+    $("gen-status").textContent = `💾 已存「${label}」的金鑰到這台電腦！`;
   }
 
-  function fillAI() {
+  async function fillAI() {
+    await refreshAISettings();
     const cfg = loadAI();
     $("ai-provider").value = cfg.provider;
-    $("ai-key").value = cfg.key;
+    $("ai-key").value = cfg.hasCloud && cfg.hasKey ? "" : cfg.key;
+    $("ai-key").placeholder = (cfg.hasCloud && cfg.hasKey)
+      ? "金鑰已存雲端（換用才需重貼，留空不變）"
+      : "貼上 API 金鑰（每家可各存一組，切換自動帶入）";
     $("ai-model").value = cfg.model;
   }
 
-  function onAIProviderChange() {
-    saveAI(); // 先把目前輸入的存回原本的 provider
-    fillAI(); // 再載入新選的 provider 的金鑰
+  async function onAIProviderChange() {
+    if (!AI_PROXY.enabled) {
+      saveAI(); /* 沒開雲端時，先把手上的值存回原本的 provider */
+    } else if ($("ai-key").value.trim()) {
+      await saveAI();
+    }
+    await fillAI();
   }
 
   /* ---------- 測試 AI 連線 ---------- */
   async function testAI() {
-    saveAI();
+    if (AI_PROXY.enabled && !$("ai-key").value.trim() && !loadAI().hasKey) {
+      $("gen-status").textContent = "👉 先貼上 API 金鑰並按「存金鑰」，再測試連線。";
+      return;
+    }
+    await saveAI();
     const cfg = loadAI();
     $("ai-test-btn").disabled = true;
     $("gen-status").textContent = "⏳ 測試連線中…";
@@ -1303,7 +1329,7 @@
     $("gen-status").textContent = "⏳ 嘗試用 AI 出題…";
 
     let qs = [];
-    if (cfg.key) {
+    if (cfgHasKey(cfg)) {
       try {
         $("gen-status").textContent = "⏳ 用 AI（" + cfg.provider + "）出題中…";
         qs = await GenQuestions.aiGenerate(item, cfg);
@@ -1314,7 +1340,7 @@
     }
 
     if (!qs || qs.length === 0) {
-      $("gen-status").textContent = cfg.key ? "⏳ 改用教育部辭典規則式出題…" : "⏳ 沒有 AI 金鑰，用教育部辭典免費出題…";
+      $("gen-status").textContent = !cfgHasKey(cfg) ? "⏳ 沒有 AI 金鑰，用教育部辭典免費出題…" : "⏳ 改用教育部辭典規則式出題…";
       try { qs = await GenQuestions.ruleGenerate(item, Object.keys(cBank).map((n) => cBank[n])); }
       catch (e) { qs = []; }
     }
@@ -1471,14 +1497,10 @@
 
   /* ---------- 雲端同步（Cloudflare D1） ---------- */
   function cloudInitUI() {
-    const tokenInput = $("cloud-token");
-    if (!tokenInput || !window.ExamCloud) return; /* 頁面未含雲端支援 */
-    tokenInput.value = window.ExamCloud.getToken() || "";
-
+    if (!window.ExamCloud) return; /* 頁面未含雲端支援 */
     $("cloud-push-btn").addEventListener("click", () => {
       const msg = $("cloud-msg");
       msg.textContent = "☁️ 同步中…";
-      window.ExamCloud.setToken(tokenInput.value.trim());
       collectWordRows();
       collectIdiomRows();
       window.ExamCloud.pushAll(buildAllDataJSON())
@@ -1503,11 +1525,7 @@
 
   /* ---------- 事件綁定 ---------- */
   function bind() {
-    $("login-btn").addEventListener("click", doLogin);
-    $("login-cancel").addEventListener("click", () => { window.location.href = "index.html"; });
     $("logout-btn").addEventListener("click", doLogout);
-    $("login-password").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
-    $("login-username").addEventListener("keydown", (e) => { if (e.key === "Enter") $("login-password").focus(); });
     $("add-lesson-btn").addEventListener("click", addLesson);
     $("lesson-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addLesson(); });
     $("lesson-select").addEventListener("change", renderWordRows);

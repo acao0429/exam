@@ -33,6 +33,71 @@
       else localStorage.removeItem(TEACHER_TOKEN_KEY);
     } catch (e) { /* 忽略 */ }
   }
+  function teacherHeaders() {
+    const h = { accept: "application/json", "content-type": "application/json" };
+    const t = getTeacherToken();
+    if (t) { h.authorization = "Bearer " + t; h["x-teacher-token"] = t; }
+    return h;
+  }
+
+  /* ============ 老師 AI 設定（金鑰只存伺服器 D1，瀏覽器不持有） ============ */
+  async function aiSettingsGet() {
+    if (!enabled()) throw new Error("尚未設定 API 網址（js/app-config.js 的 apiBase）");
+    if (!getTeacherToken()) throw new Error("請先以老師帳號登入");
+    const res = await fetch(base() + "/api/ai/settings", { headers: teacherHeaders() });
+    if (!res.ok) {
+      let msg = "";
+      try { msg = (await res.json()).error || ""; } catch (e) { /* 忽略 */ }
+      throw new Error("HTTP " + res.status + (msg ? "：" + msg : ""));
+    }
+    return res.json();
+  }
+
+  async function aiSettingsSet(provider, apiKey, model) {
+    if (!enabled()) throw new Error("尚未設定 API 網址（js/app-config.js 的 apiBase）");
+    if (!getTeacherToken()) throw new Error("請先以老師帳號登入");
+    const res = await fetch(base() + "/api/ai/settings", {
+      method: "POST",
+      headers: teacherHeaders(),
+      body: JSON.stringify({ provider, apiKey, model })
+    });
+    if (!res.ok) {
+      let msg = "";
+      try { msg = (await res.json()).error || ""; } catch (e) { /* 忽略 */ }
+      throw new Error("HTTP " + res.status + (msg ? "：" + msg : ""));
+    }
+    return res.json();
+  }
+
+  /* 測試 AI 連線（伺服器端代理測試）。回傳 { ok, message, model? } */
+  async function aiTest(provider, model) {
+    const res = await fetch(base() + "/api/ai/test", {
+      method: "POST",
+      headers: teacherHeaders(),
+      body: JSON.stringify({ provider, model })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+    return data;
+  }
+
+  /* 伺服器端 AI 代理：prompt 由前端組好，金鑰在伺服器。回傳 { text } */
+  async function aiChat(provider, model, prompt, system, temperature) {
+    const res = await fetch(base() + "/api/ai/chat", {
+      method: "POST",
+      headers: teacherHeaders(),
+      body: JSON.stringify({ provider, model, prompt, system, temperature })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+    if (!data || typeof data.text !== "string") throw new Error("AI 沒有回傳內容");
+    return data.text;
+  }
+
+  /* 判斷目前是否有「伺服器端 AI 可用」（已登入 + 已設定 apiBase） */
+  function aiProxyEnabled() {
+    return enabled() && getTeacherToken() !== "";
+  }
 
   /* ============ 本機題庫快取 ============ */
   function saveLocal(key, arr, savedKey) {
@@ -257,7 +322,7 @@
     out.textContent = "🚪 登出";
     out.addEventListener("click", async () => {
       await studentLogout();
-      renderStudentBar();
+      location.replace("login.html");
     });
     bar.appendChild(span);
     bar.appendChild(out);
@@ -268,6 +333,11 @@
     apiBase: function () { return base(); },
     getTeacherToken,
     setTeacherToken,
+    aiSettingsGet,
+    aiSettingsSet,
+    aiTest,
+    aiChat,
+    aiProxyEnabled,
     fetchBanks,
     hydrateLocalFromCloud,
     pushAll,

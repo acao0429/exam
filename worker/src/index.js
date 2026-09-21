@@ -7,13 +7,17 @@
      GET /api/words          → [{ lesson, char, zhuyin, def }]
      GET /api/content        → [{ lesson, title, passage, questions:[...] }]
      GET /api/idioms         → [{ lesson, idiom, bo, meaning, synonym, antonym }]
-     GET /api/ranking        → 全班排名（只顯示座號）
+     GET /api/ranking        → 本班排名（需登入；學生看自己班、老師看自己班）
 
    老師驗證（teacher session token）：
      POST /api/teacher/login       → { token, teacher:{id,username,name,className} }
      POST /api/teacher/logout
      GET  /api/teacher/me          → 目前登入老師
      POST /api/teacher/password    → 改密碼
+     GET  /api/ai/settings         → AI 設定（provider / hasKey / model）
+     POST /api/ai/settings         → 存某家 AI 提供者的金鑰 / model
+     POST /api/ai/test             → 伺服器端測試 AI 連線
+     POST /api/ai/chat             → 伺服器端代理：傳 prompt → AI 回文字
      PUT  /api/banks               → 整批覆蓋題庫
      GET  /api/students            → 只看自己班的學生
      POST /api/students            → 建學生（附帶班級）
@@ -67,6 +71,129 @@ function hashPassword(password, salt) {
     .then(sha256Hex);
 }
 
+/* ---------------- AI 提供者設定（伺服器端代理用） ---------------- */
+
+const AI_PROVIDERS = {
+  gemini: {
+    label: "Gemini",
+    base: "https://generativelanguage.googleapis.com/v1beta",
+    style: "gemini",
+    models: ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.7-flash"]
+  },
+  groq: {
+    label: "Groq",
+    base: "https://api.groq.com/openai/v1",
+    style: "openai",
+    models: ["llama-3.3-70b-versatile", "openai/gpt-oss-20b", "groq/compound-mini"]
+  },
+  openai: {
+    label: "OpenAI",
+    base: "https://api.openai.com/v1",
+    style: "openai",
+    models: ["gpt-4o-mini", "gpt-4o"]
+  },
+  nvidia: {
+    label: "NVIDIA NIM",
+    base: "https://integrate.api.nvidia.com/v1",
+    style: "openai",
+    models: ["meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct"]
+  },
+  agnes: {
+    label: "Agnes AI",
+    base: "https://apihub.agnes-ai.com/v1",
+    style: "openai",
+    models: ["agnes-2.5-flash", "agnes-2.0-flash", "agnes-1.5-flash"]
+  }
+};
+
+function isValidAISettingsShape(body) {
+  return typeof body === "object" && body !== null;
+}
+
+/* 把伺服器的錯誤訊息轉成人話（與前端 gen-questions.js 一致） */
+function aiFriendlyError(status, bodyText) {
+  if (/key.*invalid|api.?key|invalid key|apikey/i.test(bodyText || "")) {
+    return "API 金鑰無效，請在後台重新複製貼上金鑰。";
+  }
+  if (/not found|notfound|model/i.test(bodyText || "")) {
+    return "「找不到模型」，會自動換下一個模型試試。原始： " + String(bodyText || "").replace(/[\n\r"{}]/g, " ").trim().slice(0, 120);
+  }
+  if (status === 401 || status === 403) return "權限被拒（金鑰無效或沒權限）。";
+  if (status === 429) return "免費額度用完或太頻繁（429），稍等一下再試。";
+  return String(bodyText || "").replace(/[\n\r"{}]/g, " ").trim().slice(0, 160);
+}
+
+/* 統一接送：prompt（老師側做好的完整題目文字）＋ system（提示詞）
+   provider 決定呼叫格式（gemini / openai 相容）。回傳 assistant 文字。 */
+async function aiChat(env, teacherId, provider, model, prompt, system, temperature) {
+  const info = AI_PROVIDERS[provider];
+  if (!info) throw httpError(400, "不支援的 AI 提供者：" + provider);
+
+  const row = await env.DB.prepare(
+    "SELECT api_key, model FROM ai_settings WHERE teacher_id = ? AND provider = ?"
+  ).bind(teacherId, provider).first();
+  if (!row || !row.api_key) throw httpError(400, `尚未儲存 ${info.label} 的 API 金鑰，請先在後台貼上金鑰並按「存金鑰」。`);
+
+  const apiKey = row.api_key;
+  const modelName = model || row.model || info.models[0];
+  const temp = typeof temperature === "number" ? temperature : 0.7;
+
+  if (info.style === "gemini") {
+    return aiChatGemini(info.base, modelName, apiKey, prompt, system, temp);
+  }
+  return aiChatOpenAI(info.base, modelName, apiKey, prompt, system, temp);
+}
+
+async function aiChatOpenAI(base, model, apiKey, prompt, system, temperature) {
+  const resp = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: system || "你是一位國小國語老師。" },
+        { role: "user", content: prompt }
+      ],
+      temperature,
+      max_tokens: 4096
+    })
+  });
+  const text = await resp.text();
+  if (!resp.ok) throw httpError(502, "AI 連線失敗（HTTP " + resp.status + "）：" + aiFriendlyError(resp.status, text));
+  let data = null;
+  try { data = JSON.parse(text); } catch (e) { throw httpError(502, "AI 回傳格式錯誤"); }
+  const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if (typeof content !== "string") throw httpError(502, "AI 沒有回傳內容");
+  return content;
+}
+
+async function aiChatGemini(base, model, apiKey, prompt, system, temperature) {
+  const resp = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-goog-api-key": apiKey
+    },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+      generationConfig: { temperature, maxOutputTokens: 4096 }
+    })
+  });
+  const text = await resp.text();
+  if (!resp.ok) throw httpError(502, "AI 連線失敗（HTTP " + resp.status + "）：" + aiFriendlyError(resp.status, text));
+  let data = null;
+  try { data = JSON.parse(text); } catch (e) { throw httpError(502, "AI 回傳格式錯誤"); }
+  const content = data.candidates && data.candidates[0] && data.candidates[0].content &&
+    data.candidates[0].content.parts && data.candidates[0].content.parts[0] &&
+    data.candidates[0].content.parts[0].text;
+  if (typeof content !== "string") throw httpError(502, "AI 沒有回傳內容");
+  return content;
+}
+
 /* ---------------- 老師身分驗證 ---------------- */
 
 async function requireTeacher(request, env) {
@@ -92,7 +219,7 @@ async function requireStudent(request, env) {
     || (request.headers.get("x-student-token") || "").trim();
   if (!token) throw httpError(401, "學生尚未登入");
   const row = await env.DB.prepare(
-    "SELECT s.id, s.seat, s.name FROM sessions ss JOIN students s ON s.id = ss.student_id " +
+    "SELECT s.id, s.seat, s.name, s.class_name AS className FROM sessions ss JOIN students s ON s.id = ss.student_id " +
     "WHERE ss.token = ? AND ss.expires_at > datetime('now')"
   ).bind(token).first();
   if (!row) throw httpError(401, "登入已過期，請重新登入");
@@ -251,13 +378,27 @@ export default {
       if (path === "/api/idioms" && method === "GET") return json(await getIdioms(env));
 
       if (path === "/api/ranking" && method === "GET") {
+        const studentToken = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim()
+          || (request.headers.get("x-student-token") || "").trim();
+        const teacherToken = (request.headers.get("x-teacher-token") || "").trim();
+        let className = null;
+        if (studentToken) {
+          const ctx = await requireStudent(request, env);
+          className = ctx.student.className;
+        } else if (teacherToken) {
+          const ctx = await requireTeacher(request, env);
+          className = ctx.teacher.className;
+        } else {
+          throw httpError(401, "未登入：請先登入後查看排名");
+        }
         const rows = await env.DB.prepare(
           "SELECT s.seat, s.class_name, " +
           "COUNT(*) AS total, " +
           "SUM(CASE WHEN a.correct = 1 THEN 1 ELSE 0 END) AS correct " +
           "FROM students s LEFT JOIN attempts a ON a.student_id = s.id " +
+          "WHERE s.class_name = ? " +
           "GROUP BY s.id, s.seat, s.class_name ORDER BY correct DESC, s.seat ASC"
-        ).all();
+        ).bind(className).all();
         return json({ ranking: rows.results || [] });
       }
 
@@ -306,6 +447,60 @@ export default {
       if (path === "/api/teacher/login" && method === "GET") {
         return json({ ok: true, message: "請使用 POST 登入" });
       }
+
+      /* ========== AI 設定與伺服器端代理 ========== */
+
+      if (path === "/api/ai/settings" && method === "GET") {
+        const ctx = await requireTeacher(request, env);
+        const { results } = await env.DB.prepare(
+          "SELECT provider, api_key, model, updated_at FROM ai_settings WHERE teacher_id = ? ORDER BY provider"
+        ).bind(ctx.teacher.id).all();
+        return json({
+          settings: (results || []).map((r) => ({
+            provider: r.provider,
+            hasKey: !!r.api_key,
+            model: r.model,
+            updatedAt: r.updated_at
+          }))
+        });
+      }
+      if (path === "/api/ai/settings" && method === "POST") {
+        const ctx = await requireTeacher(request, env);
+        const b = await request.json();
+        const provider = String((b && b.provider) || "").trim();
+        const apiKey = String((b && b.apiKey) || "").trim();
+        const model = String((b && b.model) || "").trim();
+        if (!AI_PROVIDERS[provider]) throw httpError(400, "不支援的 AI 提供者：" + provider);
+        if (!apiKey) throw httpError(400, "請貼上 API 金鑰");
+        if (!isValidAISettingsShape(b)) throw httpError(400, "內容格式錯誤");
+        await env.DB.prepare(
+          "INSERT INTO ai_settings (teacher_id, provider, api_key, model, updated_at) VALUES (?, ?, ?, ?, datetime('now')) " +
+          "ON CONFLICT(teacher_id, provider) DO UPDATE SET api_key = excluded.api_key, model = excluded.model, updated_at = datetime('now')"
+        ).bind(ctx.teacher.id, provider, apiKey, model).run();
+        return json({ ok: true, provider });
+      }
+      if (path === "/api/ai/test" && method === "POST") {
+        const ctx = await requireTeacher(request, env);
+        const b = await request.json();
+        const provider = String((b && b.provider) || "").trim();
+        const model = String((b && b.model) || "").trim();
+        if (!AI_PROVIDERS[provider]) throw httpError(400, "不支援的 AI 提供者：" + provider);
+        /* 用一句話測連線，避免燒太多額度 */
+        const reply = await aiChat(env, ctx.teacher.id, provider, model, "請回覆兩個字：成功", "你是一位國小國語老師。", 0);
+        return json({ ok: true, model: model || null, peek: String(reply || "").slice(0, 20) });
+      }
+      if (path === "/api/ai/chat" && method === "POST") {
+        const ctx = await requireTeacher(request, env);
+        const b = await request.json();
+        const provider = String((b && b.provider) || "").trim();
+        const model = String((b && b.model) || "").trim();
+        const prompt = String((b && b.prompt) || "").trim();
+        const system = String((b && b.system) || "");
+        if (!prompt) throw httpError(400, "缺少題目內容");
+        const text = await aiChat(env, ctx.teacher.id, provider, model, prompt, system || undefined, b && b.temperature);
+        return json({ ok: true, text });
+      }
+
       if (path === "/api/teacher/logout" && method === "POST") {
         const ctx = await requireTeacher(request, env);
         await env.DB.prepare("DELETE FROM teacher_sessions WHERE token = ?").bind(ctx.token).run();
