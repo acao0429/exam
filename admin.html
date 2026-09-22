@@ -27,6 +27,7 @@
         <button class="chip" data-tab="content">📖 文意測驗</button>
         <button class="chip" data-tab="idiom">🎯 成語練習</button>
         <button class="chip" data-tab="students">👨‍🎓 學生管理</button>
+        <button class="chip" data-tab="ai-settings">🤖 AI 設定</button>
       </div>
 
       <!-- 逐字輸入 -->
@@ -125,36 +126,18 @@
               <label>文章標題</label>
               <input type="text" class="admin-input" id="content-title" placeholder="例如：春天來了">
             </div>
-            <div class="form-row">
-              <label>課文內容</label>
-              <textarea id="content-passage" rows="8" placeholder="把課文整段貼在這裡"></textarea>
-            </div>
+             <div class="form-row">
+               <label>課文內容</label>
+               <textarea id="content-passage" rows="8" placeholder="把課文整段貼在這裡"></textarea>
+             </div>
 
-            <div class="form-row">
-              <label>✨ AI 自動出題（選填）</label>
-              <div class="inline-row">
-                <select id="ai-provider">
-                  <option value="nvidia">NVIDIA NIM（免費額度）</option>
-                  <option value="agnes">Agnes AI（免費額度）</option>
-                  <option value="gemini">Gemini（免費額度）</option>
-                  <option value="groq">Groq（免費額度）</option>
-                  <option value="openai">OpenAI</option>
-                </select>
-                <input type="password" class="admin-input" id="ai-key" placeholder="貼上 API 金鑰（每家可各存一組，切換自動帶入）">
-              </div>
-            </div>
-            <div class="form-row" style="margin-bottom:6px">
-              <div class="inline-row">
-                <input type="text" class="admin-input" id="ai-model" placeholder="模型名稱（留空用預設，可自訂）">
-                <button class="btn btn-gray btn-sm" id="ai-save-btn">💾 存金鑰</button>
-                <button class="btn btn-gray btn-sm" id="ai-test-btn">🔌 測試連線</button>
-              </div>
-            </div>
-            <p class="hint">NVIDIA NIM、Agnes AI、Gemini、Groq、OpenAI 的金鑰會分開存放、每個可獨立設定：先選好提供者 → 貼金鑰 → 按「存金鑰」，切換提供者時自動帶入。金鑰儲存在雲端（老師帳號專用、只存伺服器，黃金鑰不會出現在瀏覽器）。沒金鑰時自動改用「教育部辭典」免費規則式出題（需連網）。</p>
-            <div class="center" style="margin-bottom:14px">
-              <button class="btn btn-blue" id="gen-btn">✨ 自動出題</button>
-            </div>
-            <p class="hint" id="gen-status"></p>
+             <p class="hint" style="margin-bottom:14px">
+               🤖 AI 金鑰與模型設定請至 <a href="#" onclick="switchTab('ai-settings');return false;" style="color:inherit;font-weight:bold">「🤖 AI 設定」分頁</a> 統一管理。
+             </p>
+             <div class="center" style="margin-bottom:14px">
+               <button class="btn btn-blue" id="gen-btn">✨ 自動出題</button>
+             </div>
+             <p class="hint" id="gen-status"></p>
 
             <h3 class="subtitle">✍️ 出題（每題：題目＋四個選項＋勾選正確答案）</h3>
             <div id="content-questions"></div>
@@ -342,6 +325,28 @@
               </thead>
               <tbody id="stats-tbody"></tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI 設定 -->
+      <div id="tab-ai-settings" class="hidden">
+        <div class="panel">
+          <h2>🤖 AI 金鑰與模型設定</h2>
+          <p class="hint">各提供者的金鑰分開存放，可獨立設定模型。<br>
+          金鑰儲存在雲端（老師帳號專用、只存伺服器，金鑰不會出現在瀏覽器）。<br>
+          切換提供者時自動帶入對應的金鑰與模型設定。</p>
+
+          <div id="ai-settings-container"></div>
+
+          <div class="panel" style="margin-top:16px; background:#f8f9fa;">
+            <h3>💡 AI 使用範圍</h3>
+            <ul style="margin:8px 0 8px 20px; line-height:1.8">
+              <li>📖 <b>文意測驗</b>：自動出題、補詞義</li>
+              <li>🎯 <b>成語練習</b>：補齊釋義/注音/近反義、依課名補成語</li>
+              <li>📝 <b>語詞測驗</b>：批次補詞義</li>
+            </ul>
+            <p class="hint">沒金鑰時自動改用「教育部辭典」免費規則式出題（需連網）。</p>
           </div>
         </div>
       </div>

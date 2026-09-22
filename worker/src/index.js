@@ -378,26 +378,26 @@ export default {
       if (path === "/api/idioms" && method === "GET") return json(await getIdioms(env));
 
       if (path === "/api/ranking" && method === "GET") {
+        const teacherToken = (request.headers.get("x-teacher-token") || "").trim();
         const studentToken = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim()
           || (request.headers.get("x-student-token") || "").trim();
-        const teacherToken = (request.headers.get("x-teacher-token") || "").trim();
         let className = null;
-        if (studentToken) {
-          const ctx = await requireStudent(request, env);
-          className = ctx.student.className;
-        } else if (teacherToken) {
+        if (teacherToken) {
           const ctx = await requireTeacher(request, env);
           className = ctx.teacher.className;
+        } else if (studentToken) {
+          const ctx = await requireStudent(request, env);
+          className = ctx.student.className;
         } else {
           throw httpError(401, "未登入：請先登入後查看排名");
         }
         const rows = await env.DB.prepare(
           "SELECT s.seat, s.class_name, " +
-          "COUNT(*) AS total, " +
+          "COUNT(a.id) AS total, " +
           "SUM(CASE WHEN a.correct = 1 THEN 1 ELSE 0 END) AS correct " +
           "FROM students s LEFT JOIN attempts a ON a.student_id = s.id " +
           "WHERE s.class_name = ? " +
-          "GROUP BY s.id, s.seat, s.class_name ORDER BY correct DESC, s.seat ASC"
+          "GROUP BY s.id, s.seat, s.class_name ORDER BY correct DESC, CAST(s.seat AS INTEGER) ASC"
         ).bind(className).all();
         return json({ ranking: rows.results || [] });
       }

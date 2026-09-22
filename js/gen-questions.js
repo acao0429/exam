@@ -200,11 +200,11 @@
   /* ---------- AI 出題 ---------- */
   /* 2026 年確認有效的預設模型（官方文件），失敗時會自動輪流試 */
   const AI_PROVIDERS = {
-    gemini: { label: "Gemini", style: "gemini", base: "", models: ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.7-flash"] },
-    groq: { label: "Groq", style: "openai", base: "https://api.groq.com/openai/v1", models: ["llama-3.3-70b-versatile", "openai/gpt-oss-20b", "groq/compound-mini"] },
-    openai: { label: "OpenAI", style: "openai", base: "https://api.openai.com/v1", models: ["gpt-4o-mini", "gpt-4o"] },
-    nvidia: { label: "NVIDIA NIM", style: "openai", base: "https://integrate.api.nvidia.com/v1", models: ["meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct"] },
-    agnes: { label: "Agnes AI", style: "openai", base: "https://apihub.agnes-ai.com/v1", models: ["agnes-2.5-flash", "agnes-2.0-flash", "agnes-1.5-flash"] }
+    gemini: { label: "Gemini", style: "gemini", base: "", free: true, models: ['gemini-2.5-flash'] },
+    groq: { label: "Groq", style: "openai", base: "https://api.groq.com/openai/v1", free: true, models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'] },
+    openai: { label: "OpenAI", style: "openai", base: "https://api.openai.com/v1", free: false, models: ["gpt-4o-mini", "gpt-4o"] },
+    nvidia: { label: "NVIDIA NIM", style: "openai", base: "https://integrate.api.nvidia.com/v1", free: true, models: ["nvidia/nemotron-3-super-120b-a12b", "nvidia/nemotron-3-ultra-550b-a55b", "openai/gpt-oss-20b", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"] },
+    agnes: { label: "Agnes AI", style: "openai", base: "https://apihub.agnes-ai.com/v1", free: true, models: ["agnes-2.5-flash", "agnes-2.0-flash", "agnes-1.5-flash"] }
   };
 
   const AI_SYSTEM = "你是一位國小國語老師。";

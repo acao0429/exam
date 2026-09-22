@@ -176,6 +176,8 @@
     $("tab-content").classList.toggle("hidden", tab !== "content");
     $("tab-idiom").classList.toggle("hidden", tab !== "idiom");
     $("tab-students").classList.toggle("hidden", tab !== "students");
+    $("tab-ai-settings").classList.toggle("hidden", tab !== "ai-settings");
+    if (tab === "ai-settings") renderAISettings();
   }
 
   /* ---------- 課次管理 ---------- */
@@ -799,34 +801,74 @@
     )];
   }
 
-  /* 單一成語：先用內建庫，查不到的欄位留空 */
-  function lookupIdiomData(text) {
-    const src = (typeof OFFLINE_IDIOMS !== "undefined" && OFFLINE_IDIOMS[text]) || null;
+  /* 線上：萌典成語辭典 */
+  async function lookupIdiomOnline(text) {
+    const url = `https://www.moedict.tw/a/${encodeURIComponent(text)}.json`;
+    const resp = await fetchWithTimeout(url, 8000);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const h = data.h && data.h[0];
+    if (!h) return null;
+    const d = h.d && h.d[0];
+    return {
+      bo: h.b || "",
+      meaning: d && d.f ? d.f.replace(/`|~/g, "") : "",
+      synonym: d && d.s ? d.s.replace(/`/g, "").replace(/~/g, "、") : "",
+      antonym: d && d.a ? d.a.replace(/`/g, "").replace(/~/g, "、") : ""
+    };
+  }
+
+  /* 單一成語：線上優先，失敗用內建庫 */
+  async function lookupIdiomData(text) {
+    let src = null;
+    let from = "none";
+    // 先查線上
+    if (navigator.onLine !== false) {
+      try {
+        src = await lookupIdiomOnline(text);
+        if (src) from = "online";
+      } catch (e) { /* 忽略 */ }
+    }
+    // 線上沒有就查離線庫
+    if (!src && typeof OFFLINE_IDIOMS !== "undefined") {
+      src = OFFLINE_IDIOMS[text] || null;
+      if (src) from = "offline";
+    }
     return {
       idiom: text,
       bo: src ? src.bo : "",
       meaning: src ? src.meaning : "",
-      synonym: src ? (src.synonym || "") : "",
-      antonym: src ? (src.antonym || "") : "",
-      from: src ? "offline" : "none"
+      synonym: src ? src.synonym : "",
+      antonym: src ? src.antonym : "",
+      from: from
     };
   }
 
   let batchIdiomRows = [];
 
-  function runIdiomBatch() {
+  async function runIdiomBatch() {
     const raw = $("idiom-batch-text").value;
     const idioms = splitIdiomText(raw);
     if (idioms.length === 0) {
       $("idiom-batch-status").textContent = "⚠️ 沒讀到成語，請先貼上成語。";
       return;
     }
-    batchIdiomRows = idioms.map(lookupIdiomData);
-    renderIdiomBatchPreview();
+    $("idiom-batch-run-btn").disabled = true;
+    $("idiom-batch-run-btn").textContent = "✨ 查詢中…";
+    $("idiom-batch-status").textContent = "⏳ 正在自動查詢成語資料，請稍候…";
+
+    batchIdiomRows = [];
+    for (const idiom of idioms) {
+      batchIdiomRows.push(await lookupIdiomData(idiom));
+      renderIdiomBatchPreview();
+    }
+
     const miss = batchIdiomRows.filter((r) => r.from === "none").length;
+    $("idiom-batch-run-btn").disabled = false;
+    $("idiom-batch-run-btn").textContent = "✨ 批次查成語";
     $("idiom-batch-status").textContent = miss
-      ? `✅ 共 ${idioms.length} 筆；有 ${miss} 筆內建成語庫沒有，請手填或按下方「🤖 AI 補齊」。`
-      : `✅ 共 ${idioms.length} 筆，全部從內建成語庫查到資料！`;
+      ? `✅ 共 ${idioms.length} 筆；有 ${miss} 筆查不到，請手填或按下方「🤖 AI 補齊」。`
+      : `✅ 共 ${idioms.length} 筆，全部查詢成功！`;
   }
 
   function renderIdiomBatchPreview() {
@@ -1201,6 +1243,13 @@
   }
 
   /* ---------- AI 設定（2026/9 起金鑰存雲端 D1，瀏覽器不留金鑰） ---------- */
+  const AI_PROVIDERS = {
+    gemini: { label: "Gemini", icon: "🧠", free: true, models: ['gemini-2.5-flash'] },
+    groq: { label: "Groq", icon: "⚡", free: true, models: ['llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b'] },
+    agnes: { label: "Agnes AI", icon: "✨", free: true, models: ["agnes-2.5-flash", "agnes-2.0-flash", "agnes-1.5-flash"] },
+    nvidia: { label: "NVIDIA NIM", icon: "🎮", free: true, models: ["nvidia/nemotron-3-super-120b-a12b", "nvidia/nemotron-3-ultra-550b-a55b", "openai/gpt-oss-20b", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"] },
+    openai: { label: "OpenAI", icon: "🅾️", free: false, models: ["gpt-4o-mini", "gpt-4o"] }
+  };
   const AI_PROXY = { enabled: false, settings: {} }; // settings[provider] = { hasKey, model }
 
   /* 舊版（2026/9 前）金鑰只存一格，自動搬移到 Gemini */
@@ -1219,7 +1268,7 @@
     AI_PROXY.settings = {};
     if (!AI_PROXY.enabled) {
       /* 雲端沒開：沿用舊有的本機金鑰（僅供離線直連） */
-      ["gemini", "groq", "openai", "nvidia", "agnes"].forEach((p) => {
+      ["gemini", "groq", "agnes", "nvidia", "openai"].forEach((p) => {
         if (localStorage.getItem("exam_ai_key_" + p)) {
           AI_PROXY.settings[p] = { hasKey: true, model: localStorage.getItem("exam_ai_model_" + p) || "" };
         }
@@ -1252,6 +1301,19 @@
   }
 
   function cfgHasKey(cfg) { return !!(cfg && (cfg.key || cfg.hasKey)); }
+  function loadAIForProvider(provider) {
+    const st = AI_PROXY.settings[provider] || {};
+    const localKey = localStorage.getItem("exam_ai_key_" + provider) || "";
+    const localModel = localStorage.getItem("exam_ai_model_" + provider) || "";
+    const hasCloud = AI_PROXY.enabled;
+    return {
+      provider,
+      model: st.model || localModel || (AI_PROVIDERS[provider] ? AI_PROVIDERS[provider].models[0] : "") || "",
+      hasKey: hasCloud ? !!st.hasKey : !!localKey,
+      hasCloud,
+      key: hasCloud ? "" : localKey
+    };
+  }
 
   async function saveAI() {
     const provider = $("ai-provider").value;
@@ -1317,6 +1379,176 @@
     $("ai-test-btn").disabled = false;
   }
 
+  /* ---------- AI 設定頁面渲染 ---------- */
+  function renderAISettings() {
+    const container = $("ai-settings-container");
+    if (!container) return;
+    container.innerHTML = "";
+
+    // 優先順序設定
+    const priorityStr = localStorage.getItem("exam_ai_priority") || JSON.stringify(["gemini", "groq", "agnes", "nvidia", "openai"]);
+    let aiPriority = [];
+    try { aiPriority = JSON.parse(priorityStr); } catch (e) { aiPriority = ["gemini", "groq", "agnes", "nvidia", "openai"]; }
+    Object.keys(AI_PROVIDERS).forEach(k => { if (!aiPriority.includes(k)) aiPriority.push(k); });
+    aiPriority = aiPriority.filter(k => AI_PROVIDERS[k]);
+
+    const priorityNote = document.createElement("p");
+    priorityNote.className = "hint";
+    priorityNote.style.marginBottom = "16px";
+    priorityNote.innerHTML = "💡 <b>API 優先順序</b>：出題時依此順序嘗試，免費提供者優先。按住 Ctrl/Cmd 多選後按⬆⬇調整。";
+    container.appendChild(priorityNote);
+
+    const priorityPanel = document.createElement("div");
+    priorityPanel.className = "panel";
+    priorityPanel.style.marginBottom = "16px";
+    priorityPanel.style.padding = "16px";
+    priorityPanel.innerHTML = `
+      <div class="form-row" style="align-items:center">
+        <label style="min-width:100px">🔄 API 優先順序</label>
+        <select id="ai-priority-order" multiple style="flex:1; height:120px">
+          ${aiPriority.map(k => `<option value="${k}" selected>${AI_PROVIDERS[k].icon} ${AI_PROVIDERS[k].label}${AI_PROVIDERS[k].free ? "（免費）" : ""}</option>`).join('')}
+        </select>
+        <div class="inline-row" style="margin-left:8px">
+          <button class="btn btn-sm btn-gray" id="ai-priority-up">⬆</button>
+          <button class="btn btn-sm btn-gray" id="ai-priority-down">⬇</button>
+          <button class="btn btn-sm btn-gray" id="ai-priority-reset">↺ 預設</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(priorityPanel);
+
+    // 各提供者卡片
+    Object.entries(AI_PROVIDERS).forEach(([key, prov]) => {
+      const st = AI_PROXY.settings[key] || {};
+      const localKey = localStorage.getItem("exam_ai_key_" + key) || "";
+      const localModel = localStorage.getItem("exam_ai_model_" + key) || "";
+      const hasKey = (st.hasKey && AI_PROXY.enabled) || !!localKey;
+      const currentModel = st.model || localModel || prov.models[0] || "";
+      const priorityIdx = aiPriority.indexOf(key);
+
+      const card = document.createElement("div");
+      card.className = "panel";
+      card.style.marginBottom = "12px";
+      card.style.padding = "16px";
+      card.innerHTML = `
+        <div class="form-row" style="align-items:center; margin-bottom:12px">
+          <span style="font-size:18px; font-weight:bold; margin-right:12px">${prov.icon} ${prov.label}</span>
+          <span class="hint" style="margin-right:auto">優先 #${priorityIdx + 1}${AI_PROVIDERS[key] && AI_PROVIDERS[key].free ? " 🆓" : ""}${hasKey ? " ✅ 已設金鑰" : " ⚪ 尚未設定"}</span>
+        </div>
+        <div class="form-row">
+          <label>模型</label>
+          <select id="ai-model-${key}" class="admin-input" style="flex:1">
+            ${prov.models.map(m => `<option value="${m}" ${m === currentModel ? 'selected' : ''}>${m}</option>`).join('')}
+            <option value="">（自訂模型）</option>
+          </select>
+          <input type="text" id="ai-model-custom-${key}" class="admin-input" placeholder="輸入模型名稱"
+            value="${!prov.models.includes(currentModel) ? currentModel : ''}" style="flex:1; display:${prov.models.includes(currentModel) ? 'none' : ''}">
+        </div>
+        <div class="form-row">
+          <label>API 金鑰</label>
+          <input type="password" id="ai-key-${key}" class="admin-input" placeholder="貼上 API 金鑰"
+            value="${hasKey && !AI_PROXY.enabled ? localKey : ''}" style="flex:1">
+        </div>
+        <div class="center" style="margin-top:12px">
+          <button class="btn btn-blue btn-sm" data-action="save" data-provider="${key}">💾 存金鑰</button>
+          <button class="btn btn-gray btn-sm" data-action="test" data-provider="${key}" style="margin-left:8px">🔌 測試連線</button>
+          <span id="ai-status-${key}" class="hint" style="margin-left:12px"></span>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+
+    // 綁定事件
+    $("ai-priority-up").addEventListener("click", () => movePriority(-1));
+    $("ai-priority-down").addEventListener("click", () => movePriority(1));
+    $("ai-priority-reset").addEventListener("click", resetPriority);
+    // Debug: 容器點擊用事件委派，只綁一次（避免重複渲染造成多重監聽）
+    if (!container.dataset.listenerAttached) {
+      container.dataset.listenerAttached = "true";
+      container.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-action]");
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const provider = btn.dataset.provider;
+        if (action === "save") saveAIProvider(provider);
+        else if (action === "test") testAIProvider(provider);
+      });
+    }
+    // 模型下拉 change：每次渲染都要重新綁定（元素每次重建）
+    Object.keys(AI_PROVIDERS).forEach(key => {
+      $(`ai-model-${key}`)?.addEventListener("change", (e) => {
+        $(`ai-model-custom-${key}`).style.display = e.target.value === "" ? "" : "none";
+      });
+    });
+  }
+
+  function movePriority(dir) {
+    const sel = $("ai-priority-order");
+    const options = Array.from(sel.options);
+    const selectedIdx = options.findIndex(o => o.selected);
+    if (selectedIdx === -1) return;
+    const newIdx = selectedIdx + dir;
+    if (newIdx < 0 || newIdx >= options.length) return;
+    [options[selectedIdx], options[newIdx]] = [options[newIdx], options[selectedIdx]];
+    while (sel.firstChild) sel.removeChild(sel.firstChild);
+    options.forEach(o => sel.appendChild(o));
+    localStorage.setItem("exam_ai_priority", JSON.stringify(Array.from(sel.options).map(o => o.value)));
+  }
+
+  function resetPriority() {
+    const def = ["gemini", "groq", "agnes", "nvidia", "openai"];
+    localStorage.setItem("exam_ai_priority", JSON.stringify(def));
+    renderAISettings();
+  }
+
+  async function saveAIProvider(provider) {
+    const keyInput = $(`ai-key-${provider}`);
+    const modelSelect = $(`ai-model-${provider}`);
+    const customModelInput = $(`ai-model-custom-${provider}`);
+    const statusSpan = $(`ai-status-${provider}`);
+    const apiKey = keyInput.value.trim();
+    const model = modelSelect.value === "" ? (customModelInput.value.trim() || "") : modelSelect.value;
+
+    if (AI_PROXY.enabled) {
+      if (!apiKey) { statusSpan.textContent = "⚠️ 請貼上 API 金鑰"; statusSpan.style.color = "orange"; return; }
+      try {
+        await window.ExamCloud.aiSettingsSet(provider, apiKey, model);
+        AI_PROXY.settings[provider] = { hasKey: true, model };
+        localStorage.setItem("exam_ai_provider", provider);
+        statusSpan.textContent = "✅ 已存到雲端！"; statusSpan.style.color = "green";
+        keyInput.value = ""; keyInput.placeholder = "金鑰已存雲端（留空不變）";
+      } catch (e) { statusSpan.textContent = "❌ 儲存失敗：" + e.message; statusSpan.style.color = "red"; }
+    } else {
+      localStorage.setItem("exam_ai_key_" + provider, apiKey || "");
+      localStorage.setItem("exam_ai_model_" + provider, model || "");
+      if (!localStorage.getItem("exam_ai_provider")) localStorage.setItem("exam_ai_provider", provider);
+      statusSpan.textContent = "✅ 已存到本機！"; statusSpan.style.color = "green";
+    }
+  }
+
+  async function testAIProvider(provider) {
+    const statusSpan = $(`ai-status-${provider}`);
+    const keyInput = $(`ai-key-${provider}`);
+    const modelSelect = $(`ai-model-${provider}`);
+    const customModelInput = $(`ai-model-custom-${provider}`);
+    const apiKey = keyInput.value.trim() || (localStorage.getItem("exam_ai_key_" + provider) || "");
+    const model = modelSelect.value === "" ? (customModelInput.value.trim() || "") : modelSelect.value;
+
+    if (!apiKey) { statusSpan.textContent = "⚠️ 請先貼上金鑰"; statusSpan.style.color = "orange"; return; }
+    statusSpan.textContent = "⏳ 測試中…"; statusSpan.style.color = "";
+    const cfg = { provider, model, key: apiKey, hasCloud: AI_PROXY.enabled };
+    try {
+      /* 雲端模式：先把你「現在貼的這把新金鑰」存到 D1，測試才會用新金鑰（避免測到舊的） */
+      if (AI_PROXY.enabled && apiKey && keyInput.value.trim()) {
+        try { await window.ExamCloud.aiSettingsSet(provider, apiKey, model); }
+        catch (e) { /* 存失敗不擋走純測試路徑 */ }
+      }
+      const r = await GenQuestions.testConnection(cfg);
+      statusSpan.textContent = (r.ok ? "✅ " : "❌ ") + r.message;
+      statusSpan.style.color = r.ok ? "green" : "red";
+    } catch (e) { statusSpan.textContent = "❌ 測試失敗：" + (e.message || e); statusSpan.style.color = "red"; }
+  }
+
   /* ---------- 自動出題 ---------- */
   async function autoGenerateQuestions() {
     const item = currentContent();
@@ -1328,19 +1560,31 @@
     $("gen-btn").textContent = "✨ 出題中…";
     $("gen-status").textContent = "⏳ 嘗試用 AI 出題…";
 
+    /* 依優先順序逐一嘗試各家 AI，最後才用教育部 */
+    const priorityStr = localStorage.getItem("exam_ai_priority") || JSON.stringify(["gemini", "groq", "agnes", "nvidia", "openai"]);
+    let aiPriority = [];
+    try { aiPriority = JSON.parse(priorityStr); } catch (e) { aiPriority = ["gemini", "groq", "agnes", "nvidia", "openai"]; }
+    aiPriority = aiPriority.filter(k => AI_PROVIDERS[k] && (AI_PROXY.settings[k] ? AI_PROXY.settings[k].hasKey : !!localStorage.getItem("exam_ai_key_" + k)));
+
     let qs = [];
-    if (cfgHasKey(cfg)) {
+    let triedMsg = [];
+    for (const provKey of aiPriority) {
+      const provCfg = loadAIForProvider(provKey);
+      $("gen-status").textContent = "⏳ 用 AI（" + (AI_PROVIDERS[provKey] ? AI_PROVIDERS[provKey].label : provKey) + "）出題中…";
       try {
-        $("gen-status").textContent = "⏳ 用 AI（" + cfg.provider + "）出題中…";
-        qs = await GenQuestions.aiGenerate(item, cfg);
+        qs = await GenQuestions.aiGenerate(item, provCfg);
+        if (qs && qs.length > 0) {
+          $("gen-status").textContent = `✨ 已用 ${AI_PROVIDERS[provKey] ? AI_PROVIDERS[provKey].label : provKey} 出 ${qs.length} 題！`;
+          break;
+        }
       } catch (e) {
-        $("gen-status").textContent = `⚠️ AI 失敗（${e.message}），改用教育部辭典…`;
+        triedMsg.push(provKey + "（" + (e.message || "失敗") + "）");
         qs = [];
       }
     }
 
     if (!qs || qs.length === 0) {
-      $("gen-status").textContent = !cfgHasKey(cfg) ? "⏳ 沒有 AI 金鑰，用教育部辭典免費出題…" : "⏳ 改用教育部辭典規則式出題…";
+      $("gen-status").textContent = triedMsg.length ? "⏳ " + triedMsg.join(" → ") + "，改用教育部辭典…" : "⏳ 沒有 AI 金鑰，用教育部辭典免費出題…";
       try { qs = await GenQuestions.ruleGenerate(item, Object.keys(cBank).map((n) => cBank[n])); }
       catch (e) { qs = []; }
     }
@@ -1573,9 +1817,6 @@
       const it = currentContent();
       if (it) it.passage = $("content-passage").value;
     });
-    $("ai-save-btn").addEventListener("click", saveAI);
-    $("ai-test-btn").addEventListener("click", testAI);
-    $("ai-provider").addEventListener("change", onAIProviderChange);
     $("gen-btn").addEventListener("click", autoGenerateQuestions);
 
     document.querySelectorAll(".tabbar .chip").forEach((chip) => {
