@@ -155,7 +155,6 @@
       if (window.console) console.warn("題庫載入失敗（可能尚未登入或 D1 尚未設定）", e.message);
     }).finally(() => {
       bind();
-      A.cloudSync ? A.cloudSync.cloudInitUI() : {};
       checkLogin();
     });
   });

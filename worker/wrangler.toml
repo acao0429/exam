@@ -7,3 +7,4 @@ compatibility_date = "2026-09-18"
 binding = "DB"
 database_name = "exam-db"
 database_id = "4000038e-00e3-4628-b8d9-848443664fd7"
+# 請填入你的 Cloudflare Account ID（從 dashboard 右上角取得）
