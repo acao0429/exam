@@ -229,15 +229,7 @@
         </div>
         <p class="hint" id="save-msg" style="margin-top:8px"></p>
 
-        <div class="panel" style="margin-top:16px; background:#f8f9fa;" data-admin-only>
-          <h3>📦 備份與還原（管理員專用）</h3>
-          <p class="hint">完整備份含帳號、班級、題庫與學生資料（不含作答記錄）。</p>
-          <div class="inline-row" style="justify-content:center; flex-wrap:wrap">
-            <button class="btn btn-blue btn-sm" onclick="if(window.ExamCloud&&window.ExamCloud.fetchBackup) window.ExamCloud.fetchBackup().then(b=>alert('備份成功，筆數：'+JSON.stringify(b).length)).catch(e=>alert('失敗：'+e.message))">📤 匯出備份</button>
-            <button class="btn btn-red btn-sm" onclick="if(window.ExamCloud&&window.ExamCloud.restoreBackup) { const p=prompt('貼上備份內容（JSON）'); if(p) window.ExamCloud.restoreBackup(JSON.parse(p)).then(r=>alert('還原完成，已重新登入')).catch(e=>alert('還原失敗：'+e.message)); } else alert('尚未初始化')">📥 還原備份</button>
-          </div>
-          <p class="hint" id="restore-msg" style="margin-top:8px"></p>
-        </div>
+
       </div>
 
       <!-- 學生管理 -->
