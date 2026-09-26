@@ -368,14 +368,11 @@
       <div id="tab-accounts" class="hidden" data-admin-only>
         <div class="panel">
           <h2>👑 帳號與班級管理（管理員專用）</h2>
-          <p class="hint">教師帳號由 admin 建立與管理；班級透過 teachers.class_id 與 classes.id 建立關聯。</p>
-          <div style="margin-top:12px">
-            <p>功能已整合至雲端資料庫（D1）：<br>
-            • 教師帳號：/api/teachers（建立、修改、重設密碼、停用）<br>
-            • 班級：/api/classes（建立、修改）<br>
-            • 學生：/api/students（建立、修改、重設密碼、刪除）</p>
-            <button class="btn btn-blue" onclick="alert('帳號管理功能已在雲端完成，請直接透過管理員帳號操作')">📋 查看教師與班級列表（可擴充為表格）</button>
-          </div>
+          <button class="btn btn-blue" onclick="window.Admin.accounts.showAddForm()">➕ 新增教師帳號</button>
+          <table class="word-table" style="margin-top:12px;width:100%">
+            <thead><tr><th>#</th><th>登入帳號</th><th>姓名</th><th>班級</th><th>角色</th><th>狀態</th><th>操作</th></tr></thead>
+            <tbody id="accounts-tbody"><tr><td colspan="7">載入中…</td></tr></tbody>
+          </table>
         </div>
       </div>
 
