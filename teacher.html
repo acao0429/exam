@@ -6,15 +6,20 @@
 <title>老師首頁 - 國語月考複習樂園</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-  <header class="quiz-header">
-    <h1>🧑‍🏫 老師首頁</h1>
-    <span class="header-mascot">
-      <span id="teacher-class-badge" style="display:none;margin-right:8px;font-size:13px;color:#555"></span>
-      <button class="btn btn-sm btn-gray" id="teacher-logout-btn" style="display:none">🚪 登出</button>
-      🧑‍🏫
-    </span>
-  </header>
+<body class="home">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <span class="topbar-title">🧑‍🏫 老師首頁</span>
+      <div class="topbar-buttons">
+        <span id="teacher-welcome-text" style="display:none; font-weight:bold; margin-right:8px"></span>
+        <span id="teacher-class-badge" style="display:none; margin-right:8px; font-size:13px; color:#555"></span>
+        <button class="topbar-login" id="top-ranking-btn" style="display:none">🏆 排名</button>
+        <button class="topbar-login" id="go-admin-btn" style="display:none">🛠 進入題庫管理</button>
+        <button class="topbar-login" id="change-pwd-btn" style="display:none">🔑 修改密碼</button>
+        <button class="topbar-login" id="teacher-logout-btn" style="display:none">🚪 登出</button>
+      </div>
+    </div>
+  </div>
 
   <main class="screen screen-wide">
     <div class="panel">

@@ -1,7 +1,7 @@
 /* ============================================================
    老師首頁（teacher.html）
    未登入 → 整頁跳回 login.html
-   已登入：顯示歡迎、進入後台、全班排名、修改密碼、登出
+   已登入：顯示歡迎、排名、進入後台、修改密碼、登出
    ============================================================ */
 
 (function () {
@@ -37,12 +37,14 @@
 
   function fillWelcome() {
     const info = JSON.parse(localStorage.getItem("exam_teacher_info") || "{}");
-    $("teacher-welcome").textContent =
-      "👋 歡迎，" + (info.name || info.username || "") + " 老師（" + (info.className || "未設班級") + "）";
-    if (info.className) {
-      $("teacher-class-badge").textContent = "📚 " + info.className;
-      $("teacher-class-badge").style.display = "inline";
-    }
+    $("teacher-welcome-text").textContent =
+      "👋 歡迎，" + (info.name || info.username || "") + " 老師" + (info.className ? "（" + info.className + "）" : "");
+    $("teacher-welcome-text").style.display = "inline-block";
+    $("teacher-class-badge").textContent = info.className ? "📚 " + info.className : "";
+    $("teacher-class-badge").style.display = info.className ? "inline" : "none";
+    $("top-ranking-btn").style.display = "inline-block";
+    $("go-admin-btn").style.display = "inline-block";
+    $("change-pwd-btn").style.display = "inline-block";
     $("teacher-logout-btn").style.display = "inline-block";
   }
 
@@ -68,7 +70,7 @@
     if (!token) { location.replace("login.html"); return; }
     try {
       const res = await fetch(apiBase() + "/api/ranking", {
-        headers: { accept: "application/json", "x-teacher-token": token }
+        headers: { accept: "application/json", "x-teacher-token": token, "authorization": "Bearer " + token }
       });
       const data = await res.json();
       if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
@@ -130,7 +132,7 @@
       return;
     }
     if (newPwd !== confirmPwd) {
-      $("change-pwd-msg").textContent = "❌ 新密碼與確認密碼不一致";
+      $("change-pwd-msg").textContent = "❌ 新密碼與確認新密碼不一致";
       return;
     }
     if (newPwd.length < 4) {
@@ -141,7 +143,7 @@
     try {
       const res = await fetch(apiBase() + "/api/teacher/password", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-teacher-token": token },
+        headers: { "content-type": "application/json", "x-teacher-token": token, "authorization": "Bearer " + token },
         body: JSON.stringify({ oldPassword: oldPwd, password: newPwd })
       });
       const data = await res.json();
@@ -162,7 +164,7 @@
     if (!requireLogin()) return;
     fillWelcome();
     $("go-admin-btn").addEventListener("click", () => { window.location.href = "admin.html"; });
-    $("ranking-btn").addEventListener("click", openRanking);
+    $("top-ranking-btn").addEventListener("click", openRanking);
     $("ranking-close").addEventListener("click", closeRanking);
     $("ranking-refresh").addEventListener("click", openRanking);
     $("change-pwd-btn").addEventListener("click", openChangePassword);

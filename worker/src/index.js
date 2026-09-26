@@ -391,14 +391,14 @@ export default {
         } else {
           throw httpError(401, "未登入：請先登入後查看排名");
         }
-        const rows = await env.DB.prepare(
-          "SELECT s.seat, s.class_name, " +
-          "COUNT(a.id) AS total, " +
-          "SUM(CASE WHEN a.correct = 1 THEN 1 ELSE 0 END) AS correct " +
-          "FROM students s LEFT JOIN attempts a ON a.student_id = s.id " +
-          "WHERE s.class_name = ? " +
-          "GROUP BY s.id, s.seat, s.class_name ORDER BY correct DESC, CAST(s.seat AS INTEGER) ASC"
-        ).bind(className).all();
+        let queryStr = "SELECT s.seat, s.class_name, COUNT(a.id) AS total, SUM(CASE WHEN a.correct = 1 THEN 1 ELSE 0 END) AS correct FROM students s LEFT JOIN attempts a ON a.student_id = s.id WHERE 1=1";
+        const params = [];
+        if (className && String(className).trim() !== "") {
+          queryStr += " AND LOWER(TRIM(s.class_name)) = LOWER(TRIM(?))";
+          params.push(String(className).trim());
+        }
+        queryStr += " GROUP BY s.id, s.seat, s.class_name ORDER BY correct DESC, CAST(s.seat AS INTEGER) ASC";
+        const rows = await env.DB.prepare(queryStr).bind(...params).all();
         return json({ ranking: rows.results || [] });
       }
 
