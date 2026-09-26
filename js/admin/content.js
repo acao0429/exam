@@ -55,7 +55,7 @@
     S.cBank[name] = { lesson: name, title: "", passage: "", questions: [blankQuestion()] };
     $("content-lesson-name").value = "";
     renderContentLessonSelect();
-    A.store.persistContentBank();
+    A.store.quiet(A.store.persistContentBank());
   }
 
   function deleteContentLesson() {
@@ -70,7 +70,7 @@
     if (!ok) return;
     delete S.cBank[lesson];
     renderContentLessonSelect();
-    A.store.persistContentBank();
+    A.store.quiet(A.store.persistContentBank());
     $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了按「📤 匯出給學生」取得含全部題庫的檔。`;
   }
 
@@ -208,12 +208,12 @@
       alert(`⚠️ ${err}`);
       return;
     }
-    if (A.store.persistContentBank()) {
+    A.store.persistContentBank().then(() => {
       renderContentLessonSelect();
-      $("save-msg").textContent = "✅ 文意題庫已儲存！要給學生，按「📤 匯出給學生」取得包含文意的題庫檔。";
-    } else {
-      $("save-msg").textContent = "⚠️ 儲存失敗。";
-    }
+      $("save-msg").textContent = "✅ 文意題庫已儲存到 D1，學生端下次就讀得到。";
+    }).catch((e) => {
+      $("save-msg").textContent = "⚠️ 儲存失敗：" + e.message;
+    });
   }
 
   A.content = {

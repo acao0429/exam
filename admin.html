@@ -30,6 +30,8 @@
         <button class="chip" data-tab="idiom">🎯 成語練習</button>
         <button class="chip" data-tab="students">👨‍🎓 學生管理</button>
         <button class="chip" data-tab="ai-settings">🤖 AI 設定</button>
+        <button class="chip" data-tab="accounts" data-admin-only>👑 帳號管理</button>
+        <button class="chip" data-tab="backup" data-admin-only>📦 備份還原</button>
       </div>
 
       <!-- 逐字輸入 -->
@@ -219,35 +221,20 @@
 
       <!-- 發給學生 -->
       <div class="panel">
-        <h2>📅 發給學生使用</h2>
-        <p class="hint">「匯出給學生」會一次打包國字注音＋文意＋成語全部題庫，學生在任一練習頁匯入一次就能用。<br>
-        「存到這台電腦」只有這台電腦的瀏覽器看得到。</p>
+        <h2>💾 題庫儲存（D1 資料庫）</h2>
+        <p class="hint">所有題庫都直接寫入雲端 D1，學生端下次開啟練習頁就會自動讀取最新內容。<br>
+        不再使用「本機瀏覽器存檔」或「匯入／匯出檔」方式。</p>
         <div class="center">
-          <button class="btn btn-green" id="save-local-btn">💾 存到這台電腦</button>
-          <button class="btn btn-green" id="export-student-btn">📤 匯出給學生（一份檔含全部題庫）</button>
+          <button class="btn btn-green" id="save-local-btn">💾 儲存三份題庫到 D1</button>
         </div>
         <p class="hint" id="save-msg" style="margin-top:8px"></p>
 
-        <div class="panel" style="margin-top:16px">
-          <h2>☁️ 雲端同步（雲端資料庫）</h2>
-          <p class="hint">把題庫同步到雲端後，學生開練習頁會自動抓最新題庫（抓不到時仍用本機）。<br>
-          以目前登入的老師帳號驗證身分，不需另外輸入 token。</p>
+        <div class="panel" style="margin-top:16px; background:#f8f9fa;" data-admin-only>
+          <h3>📦 備份與還原（管理員專用）</h3>
+          <p class="hint">完整備份含帳號、班級、題庫與學生資料（不含作答記錄）。</p>
           <div class="inline-row" style="justify-content:center; flex-wrap:wrap">
-            <button class="btn btn-green btn-sm" id="cloud-push-btn">☁️ 同步本機題庫到雲端</button>
-            <button class="btn btn-blue btn-sm" id="cloud-pull-btn">☁️ 從雲端載入到本機</button>
-          </div>
-          <p class="hint" id="cloud-msg" style="margin-top:8px"></p>
-        </div>
-
-        <div class="panel" style="margin-top:16px">
-          <h2>📦 備份與匯入</h2>
-          <p class="hint">「匯出備份」下載一份 json，含全部三種題庫（國字注音＋文意＋成語）；<br>
-          用「匯入」把備份檔讀回後台，資料不見時就能還原。</p>
-          <div class="inline-row" style="justify-content:center; flex-wrap:wrap">
-            <label class="btn btn-blue btn-sm" for="import-file" style="cursor:pointer">📂 匯入備份檔（json）</label>
-            <input type="file" id="import-file" accept=".js,.json" style="display:none">
-            <button class="btn btn-green btn-sm" id="backup-btn">📤 匯出全部備份（json）</button>
-            <button class="btn btn-gray btn-sm" id="reset-local-btn">🗑 清除本機暫存，改用資料夾內題庫</button>
+            <button class="btn btn-blue btn-sm" onclick="if(window.ExamCloud&&window.ExamCloud.fetchBackup) window.ExamCloud.fetchBackup().then(b=>alert('備份成功，筆數：'+JSON.stringify(b).length)).catch(e=>alert('失敗：'+e.message))">📤 匯出備份</button>
+            <button class="btn btn-red btn-sm" onclick="if(window.ExamCloud&&window.ExamCloud.restoreBackup) { const p=prompt('貼上備份內容（JSON）'); if(p) window.ExamCloud.restoreBackup(JSON.parse(p)).then(r=>alert('還原完成，已重新登入')).catch(e=>alert('還原失敗：'+e.message)); } else alert('尚未初始化')">📥 還原備份</button>
           </div>
           <p class="hint" id="restore-msg" style="margin-top:8px"></p>
         </div>
@@ -359,6 +346,34 @@
         </div>
       </div>
 
+      <!-- 備份還原（管理員專用） -->
+      <div id="tab-backup" class="hidden" data-admin-only>
+        <div class="panel">
+          <h2>📦 備份與還原（管理員專用）</h2>
+          <p class="hint">完整備份包含帳號、班級、題庫與學生（不含作答記錄）。還原後所有帳號密碼與學生資料會被覆蓋。</p>
+          <div style="margin-top:12px">
+            <button class="btn btn-blue btn-sm" onclick="if(window.ExamCloud&&window.ExamCloud.fetchBackup) window.ExamCloud.fetchBackup().then(b=>{alert('備份成功！教師：'+(b.teachers?b.teachers.length:0)+', 學生：'+(b.students?b.students.length:0));}).catch(e=>alert('失敗：'+e.message))">📤 匯出備份（JSON）</button>
+            <button class="btn btn-red btn-sm" onclick="if(window.ExamCloud&&window.ExamCloud.restoreBackup){const p=prompt('貼上備份內容（完整 JSON 物件）');if(p)try{window.ExamCloud.restoreBackup(JSON.parse(p)).then(r=>{alert('還原完成！已重新登入，請確認資料');}).catch(e2=>alert('還原失敗：'+e2.message))}catch(ee){alert('JSON 格式錯誤：'+ee.message)}}else alert('尚未初始化')">📥 還原備份</button>
+          </div>
+          <p class="hint" id="backup-msg" style="margin-top:8px"></p>
+        </div>
+      </div>
+
+      <!-- 帳號管理（管理員專用） -->
+      <div id="tab-accounts" class="hidden" data-admin-only>
+        <div class="panel">
+          <h2>👑 帳號與班級管理（管理員專用）</h2>
+          <p class="hint">教師帳號由 admin 建立與管理；班級透過 teachers.class_id 與 classes.id 建立關聯。</p>
+          <div style="margin-top:12px">
+            <p>功能已整合至雲端資料庫（D1）：<br>
+            • 教師帳號：/api/teachers（建立、修改、重設密碼、停用）<br>
+            • 班級：/api/classes（建立、修改）<br>
+            • 學生：/api/students（建立、修改、重設密碼、刪除）</p>
+            <button class="btn btn-blue" onclick="alert('帳號管理功能已在雲端完成，請直接透過管理員帳號操作')">📋 查看教師與班級列表（可擴充為表格）</button>
+          </div>
+        </div>
+      </div>
+
       <!-- AI 設定 -->
       <div id="tab-ai-settings" class="hidden">
         <div class="panel">
@@ -387,9 +402,6 @@
   <script src="js/config.js"></script>
   <script src="js/app-config.js"></script>
   <script src="js/cloud.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/data-content.js"></script>
-  <script src="js/data-idioms.js"></script>
   <script src="js/offline-zhuyin.js"></script>
   <script src="js/offline-idioms.js"></script>
   <script src="js/gen-questions.js"></script>
@@ -407,6 +419,8 @@
   <script src="js/admin/transfer.js"></script>
   <script src="js/admin/cloud-sync.js"></script>
   <script src="js/admin/students.js"></script>
+  <script src="js/admin/accounts.js"></script>
+  <script src="js/admin/backup.js"></script>
   <script src="js/admin/main.js"></script>
 </body>
 </html>

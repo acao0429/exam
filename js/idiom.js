@@ -10,24 +10,18 @@
 (function () {
   "use strict";
 
-  /* 題庫：優先使用老師後台存到這台電腦的版本 */
-  const STORE_KEY = "exam_idiom_bank_v1";
-  let BANK = IDIOM_BANK;
+  /* 題庫：唯一來源是 D1（透過 js/cloud.js 的 ExamCloud.getBank） */
+  let BANK = [];
 
-  function loadBank() {
+  function getBank() { return BANK; }
+  async function loadBank() {
+    if (!window.ExamCloud || !window.ExamCloud.enabled()) return;
     try {
-      const saved = localStorage.getItem(STORE_KEY);
-      if (saved) BANK = JSON.parse(saved);
-    } catch (e) { /* 忽略 */ }
-  }
-
-  loadBank();
-
-  function getBank() {
-    /* 老師後台存過（即使存的是空的），就完全以它為準，不要再回退到內建範例 */
-    if (localStorage.getItem("exam_idiom_bank_saved") === "1") return BANK;
-    if (BANK.length > 0) return BANK;
-    return IDIOM_BANK;
+      BANK = await window.ExamCloud.getBank("idioms");
+    } catch (e) {
+      BANK = [];
+      if (window.console) console.error("題庫載入失敗：", e.message);
+    }
   }
 
   let selectedLessons = new Set();
@@ -451,11 +445,12 @@
 
   function boot() {
     if (window.ExamCloud && window.ExamCloud.enabled()) {
-      /* 雲端優先：抓取雲端題庫寫進本機快取，再重新載入 BANK；失敗就用本機。 */
-      window.ExamCloud.hydrateLocalFromCloud()
-        .then(() => { loadBank(); })
-        .catch(() => { loadBank(); })
-        .finally(() => { if (window.ExamCloud) window.ExamCloud.renderStudentBar(); init(); });
+      /* 題庫唯一來源是 D1：先讀回來，再畫面。讀不到就當作沒有題目。 */
+      loadBank().then(() => {
+        initAttemptUpload();
+        if (window.ExamCloud) window.ExamCloud.renderStudentBar();
+        init();
+      });
     } else {
       if (window.ExamCloud) window.ExamCloud.renderStudentBar();
       initAttemptUpload(); init();

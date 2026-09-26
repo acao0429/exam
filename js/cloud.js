@@ -1,20 +1,22 @@
 /* ============================================================
    雲端共用（老師後台 ＋ 學生端）
-   - 老師後台：pushAll() 三份題庫整批覆蓋；fetchBanks() 讀雲端
-   - 學生端：座號＋密碼登入 → 作答上雲（POST /api/attempts）
-     → 登入時抓雲端錯題（POST /api/attempts/me?wrong=1）整包合併
-     → 錯題本變成跨裝置（手機/平板/電腦共用同一本）
+
+   資料來源：全部以 D1 為唯一真實來源。
+   學生端直接讀 /api/words、/api/content、/api/idioms；
+   老師後台存檔時用對應的單表 PUT 寫回 D1。
+   瀏覽器不再保存任何題庫副本（無 localStorage 鏡像、無匯入）。
+
+   老師後台另有：老師登入、AI 代理、備份中心。
+   學生端另有：座號＋密碼登入 → 作答上雲 → 錯題本跨裝置。
+
    apiBase 來自 js/app-config.js 的 window.APP_CONFIG.apiBase。
-   留空時所有雲端功能自動停用，行為與原本相同。
+   留空時所有雲端功能自動停用。
    ============================================================ */
 
 (function () {
   "use strict";
 
   const TEACHER_TOKEN_KEY = "exam_teacher_token";
-  const WORD_KEY = "exam_word_bank_v1";
-  const CONTENT_KEY = "exam_passage_bank_v1";
-  const IDIOM_KEY = "exam_idiom_bank_v1";
 
   function base() {
     const cfg = (typeof window !== "undefined" && window.APP_CONFIG) || {};
@@ -22,6 +24,7 @@
   }
 
   function enabled() { return base() !== ""; }
+
 
   /* ============ 老師 teacher token ============ */
   function getTeacherToken() {
@@ -99,49 +102,42 @@
     return enabled() && getTeacherToken() !== "";
   }
 
-  /* ============ 本機題庫快取 ============ */
-  function saveLocal(key, arr, savedKey) {
-    if (!Array.isArray(arr)) return;
-    localStorage.setItem(key, JSON.stringify(arr));
-    localStorage.setItem(savedKey, "1");
+  /* ============ 題庫：讀寫都直接對 D1 ============ */
+
+  const BANK_PATH = { words: "/api/words", content: "/api/content", idioms: "/api/idioms" };
+
+  function assertBank(kind) {
+    if (!BANK_PATH[kind]) throw new Error("不支援的題庫：" + kind);
   }
 
+  /* 讀取單一題庫（學生端與老師後台都用這個） */
+  async function getBank(kind) {
+    assertBank(kind);
+    if (!enabled()) throw new Error("尚未設定 API 網址（js/app-config.js 的 apiBase）");
+    const res = await fetch(base() + BANK_PATH[kind], { headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+
+  /* 一次取三份（老師後台開台時用） */
   async function fetchBanks() {
     if (!enabled()) return null;
-    const res = await fetch(base() + "/api/banks", {
-      headers: { accept: "application/json" }
-    });
+    const res = await fetch(base() + "/api/banks", { headers: { accept: "application/json" } });
     if (!res.ok) throw new Error("HTTP " + res.status);
     return res.json();
   }
 
-  /* 學生端：把雲端題庫抓下來整批覆蓋本機快取（成功才有值）。 */
-  async function hydrateLocalFromCloud() {
-    try {
-      const data = await fetchBanks();
-      if (!data) return false;
-      saveLocal(WORD_KEY, data.words, "exam_word_bank_saved");
-      saveLocal(CONTENT_KEY, data.content, "exam_passage_bank_saved");
-      saveLocal(IDIOM_KEY, data.idioms, "exam_idiom_bank_saved");
-      return true;
-    } catch (e) {
-      if (window.console) console.warn("雲端題庫載入失敗：", e.message);
-      return false;
-    }
-  }
-
-  /* 老師後台：三份題庫整批蓋雲端。data 需含 words / content / idioms。 */
-  async function pushAll(data) {
+  /* 寫回單一題庫（老師後台「儲存」按鈕） */
+  async function pushBank(kind, arr) {
+    assertBank(kind);
     if (!enabled()) throw new Error("尚未設定 API 網址（js/app-config.js 的 apiBase）");
     const token = getTeacherToken();
     if (!token) throw new Error("請先以老師帳號登入");
-    const res = await fetch(base() + "/api/banks", {
+    const res = await fetch(base() + BANK_PATH[kind], {
       method: "PUT",
-      headers: {
-        "content-type": "application/json",
-        authorization: "Bearer " + token
-      },
-      body: JSON.stringify(data)
+      headers: { "content-type": "application/json", authorization: "Bearer " + token, "x-teacher-token": token },
+      body: JSON.stringify(Array.isArray(arr) ? arr : [])
     });
     if (!res.ok) {
       let msg = "";
@@ -150,6 +146,35 @@
     }
     return res.json();
   }
+
+  /* 老師後台通用請求（帳號、班級、備份等新端點都走這裡） */
+  async function teacherFetch(path, options) {
+    if (!enabled()) throw new Error("尚未設定 API 網址（js/app-config.js 的 apiBase）");
+    const token = getTeacherToken();
+    if (!token) throw new Error("請先以老師帳號登入");
+    const opt = Object.assign({}, options || {});
+    opt.method = opt.method || "GET";
+    opt.headers = Object.assign({ accept: "application/json" }, teacherHeaders(), opt.headers || {});
+    if (opt.body !== undefined && typeof opt.body !== "string") {
+      opt.headers["content-type"] = "application/json";
+      opt.body = JSON.stringify(opt.body);
+    }
+    const res = await fetch(base() + path, opt);
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+    return data;
+  }
+
+  /* ============ 備份中心（僅管理員） ============ */
+
+  async function fetchBackup() { return teacherFetch("/api/backup"); }
+
+  async function restoreBackup(payload) {
+    return teacherFetch("/api/backup/restore", { method: "POST", body: payload });
+  }
+
+  async function backupLog() { return teacherFetch("/api/backup/log"); }
 
   /* ============================================================
      學生端：座號＋密碼登入 → 作答上雲 → 錯題本跨裝置
@@ -338,9 +363,13 @@
     aiTest,
     aiChat,
     aiProxyEnabled,
+    getBank,
     fetchBanks,
-    hydrateLocalFromCloud,
-    pushAll,
+    pushBank,
+    teacherFetch,
+    fetchBackup,
+    restoreBackup,
+    backupLog,
     renderStudentBar,
     getStudentToken,
     setStudentToken,

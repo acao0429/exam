@@ -14,17 +14,23 @@
   function showAdmin() {
     $("admin-screen").classList.remove("hidden");
     $("logout-btn").style.display = "inline-block";
-    const teacherInfo = JSON.parse(localStorage.getItem("exam_teacher_info") || "{}");
+    const me = A.state.teacher || {};
     $("teacher-welcome-text").textContent =
-      "👋 歡迎，" + (teacherInfo.name || teacherInfo.username || "") + " 老師" +
-      (teacherInfo.className ? "（" + teacherInfo.className + "）" : "");
+      "👋 歡迎，" + (me.name || me.username || "") + " 老師" +
+      (me.className ? "（" + me.className + "）" : "");
     $("teacher-welcome-text").style.display = "inline";
-    if (teacherInfo.className) {
-      $("teacher-class-badge").textContent = "📚 " + teacherInfo.className;
+    if (me.className) {
+      $("teacher-class-badge").textContent = "📚 " + me.className;
       $("teacher-class-badge").style.display = "inline";
     }
     $("ranking-link").style.display = "inline-block";
     $("change-pwd-link").style.display = "inline-block";
+
+    /* 管理員專用：帳號管理、備份還原（HTML 用 data-admin-only 標記籤與面板） */
+    document.querySelectorAll("[data-admin-only]").forEach((el) => {
+      el.classList.toggle("hidden", !A.isAdmin());
+    });
+
     A.words.renderLessonSelect();
     A.words.renderBatchLessonSelect();
     A.content.renderContentLessonSelect();
@@ -39,6 +45,10 @@
       return;
     }
     window.ExamCloud.setTeacherToken(token);
+    /* 登入時 Worker 回傳的教師資料（含角色），先放進共享狀態給各分頁判斷權限 */
+    try {
+      A.state.teacher = JSON.parse(localStorage.getItem("exam_teacher_info") || "null");
+    } catch (e) { A.state.teacher = null; }
     showAdmin();
   }
 
@@ -52,7 +62,6 @@
       }).catch(() => {});
     }
     localStorage.removeItem("exam_teacher_token");
-    localStorage.removeItem(A.keys.login);
     localStorage.removeItem("exam_teacher_info");
     window.ExamCloud.setTeacherToken("");
     $("logout-btn").style.display = "none";
@@ -60,14 +69,19 @@
   }
 
   /* ---------- 頁籤切換 ---------- */
-  const TABS = ["manual", "batch", "content", "idiom", "students", "ai-settings"];
+  const TABS = ["manual", "batch", "content", "idiom", "students", "ai-settings", "accounts", "backup"];
+  /* 只有管理員能看的分頁 */
+  const ADMIN_TABS = ["accounts", "backup"];
 
   function switchTab(tab) {
+    if (ADMIN_TABS.includes(tab) && !A.isAdmin()) return;
     document.querySelectorAll(".tabbar .chip").forEach((c) => c.classList.remove("selected"));
     const chip = document.querySelector(`.tabbar [data-tab="${tab}"]`);
     if (chip) chip.classList.add("selected");
     TABS.forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== tab));
     if (tab === "ai-settings") A.ai.renderAISettings();
+    if (tab === "accounts") A.accounts.render();
+    if (tab === "backup") A.backup.render();
   }
 
   /* ---------- 事件綁定 ---------- */
@@ -121,16 +135,8 @@
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) A.idiomBatch.runIdiomBatch();
     });
 
-    /* 💾 儲存 / 📤 匯出 / 📂 匯入 */
-    $("save-local-btn").addEventListener("click", A.save.saveAllLocal);
-    $("export-student-btn").addEventListener("click", A.transfer.exportStudentData);
-    $("backup-btn").addEventListener("click", A.transfer.backupExport);
-    $("reset-local-btn").addEventListener("click", A.transfer.resetLocal);
-    $("import-file").addEventListener("change", (e) => {
-      const f = e.target.files && e.target.files[0];
-      if (f) A.transfer.importDataFile(f);
-      e.target.value = "";
-    });
+    /* 💾 儲存到 D1（不再有本機瀏覽器存檔／匯出給學生／匯入） */
+    $("save-local-btn").addEventListener("click", A.save.saveAllToCloud);
 
     /* 頁籤 */
     document.querySelectorAll(".tabbar .chip").forEach((chip) => {
@@ -145,10 +151,13 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    A.store.reloadAllBanks();
-    bind();
-    A.cloudSync.cloudInitUI();
-    checkLogin();
+    A.store.reloadAllBanks().catch((e) => {
+      if (window.console) console.warn("題庫載入失敗（可能尚未登入或 D1 尚未設定）", e.message);
+    }).finally(() => {
+      bind();
+      A.cloudSync ? A.cloudSync.cloudInitUI() : {};
+      checkLogin();
+    });
   });
 
   A.main = { showAdmin, checkLogin, doLogout, switchTab, bind };

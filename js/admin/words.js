@@ -65,7 +65,7 @@
     $("lesson-name").value = "";
     renderLessonSelect();
     renderBatchLessonSelect();
-    A.store.persistWordBank();
+    A.store.quiet(A.store.persistWordBank());
   }
 
   function currentLesson() {
@@ -86,7 +86,7 @@
     delete S.bank[lesson];
     renderLessonSelect();
     renderBatchLessonSelect();
-    A.store.persistWordBank();
+    A.store.quiet(A.store.persistWordBank());
     $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了按「📤 匯出給學生」取得含全部題庫的檔。`;
   }
 
@@ -170,13 +170,13 @@
 
   function saveLesson() {
     collectWordRows();
-    if (A.store.persistWordBank()) {
+    A.store.persistWordBank().then(() => {
       renderLessonSelect();
       renderBatchLessonSelect();
-      $("save-msg").textContent = "✅ 已儲存！要給學生，按「📤 匯出給學生」取得包含國字注音的題庫檔。";
-    } else {
-      $("save-msg").textContent = "⚠️ 儲存失敗。";
-    }
+      $("save-msg").textContent = "✅ 已儲存到 D1，學生端下次就讀得到。";
+    }).catch((e) => {
+      $("save-msg").textContent = "⚠️ 儲存失敗：" + e.message;
+    });
   }
 
   /* ---------- 批次補詞義 ---------- */

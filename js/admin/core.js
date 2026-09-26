@@ -5,9 +5,12 @@
      1. Admin 命名空間（window.Admin）
      2. DOM 小工具 Admin.$()
      3. 共享狀態 Admin.state（bank / cBank / iBank / 批次暫存 / AI 設定）
-     4. 題庫的載入、扁平化、寫回瀏覽器
+     4. 題庫的載入、扁平化、寫回 D1
      5. AI 服務商對照表
    其餘功能各自放在同資料夾的其他檔案，最後由 main.js 組裝。
+
+   資料來源：D1 是唯一真實來源。讀用 ExamCloud.getBank()，
+   寫用 ExamCloud.pushBank()，瀏覽器不再保存題庫副本。
    ============================================================ */
 
 (function () {
@@ -17,12 +20,9 @@
 
   A.$ = (id) => document.getElementById(id);
 
-  /* localStorage 的鍵名（學生端與雲端也用同一組，不要隨意改名） */
-  A.keys = {
-    words: "exam_word_bank_v1",
-    content: "exam_passage_bank_v1",
-    idioms: "exam_idiom_bank_v1",
-    login: "exam_teacher_logged_in"
+  /* 目前登入老師的資訊（含權限角色），由 main.js 登入時填入（見 A.state.teacher） */
+  A.isAdmin = function () {
+    return !!(A.state.teacher && A.state.teacher.isAdmin);
   };
 
   /* AI 服務商（出題、補詞義、補成語都依這張表） */
@@ -38,6 +38,7 @@
      注意：bank / cBank / iBank 會被整份取代（重設、匯入時），
      所以一律用 A.state.bank 這種寫法，不要把值抓成區域變數。 */
   A.state = {
+    teacher: null,     // { id, username, displayName, classId, className, role, isAdmin }
     bank: {},          // { "課名": [ {char, zhuyin, def}, ... ] }  國字注音
     cBank: {},         // { "課名": { lesson, title, passage, questions: [...] } }  文意測驗
     iBank: {},         // { "課名": [ {idiom, bo, meaning, synonym, antonym}, ... ] }  成語
@@ -48,7 +49,15 @@
 
   /* ---------- 國字注音題庫 ----------
      內部用「課名 → [生字/語詞]」方便編輯；
-     localStorage 統一存成 WORD_BANK 相同的扁平陣列，學生端才讀得懂。 */
+     對外（存進 D1、給學生讀）一律是扁平陣列。 */
+
+  function cloud() {
+    if (!window.ExamCloud || !window.ExamCloud.enabled()) {
+      throw new Error("尚未設定 API 網址（js/app-config.js 的 apiBase）");
+    }
+    return window.ExamCloud;
+  }
+
   function groupToMap(flat) {
     const grouped = {};
     flat.forEach((w) => {
@@ -58,12 +67,8 @@
     return grouped;
   }
 
-  function loadBank() {
-    try {
-      const saved = localStorage.getItem(A.keys.words);
-      if (saved) return groupToMap(JSON.parse(saved));
-    } catch (e) { /* 忽略 */ }
-    return groupToMap(WORD_BANK);
+  async function loadBank() {
+    return groupToMap(await cloud().getBank("words"));
   }
 
   function bankToFlat() {
@@ -78,28 +83,15 @@
     return flat;
   }
 
-  /* 把整份題庫寫進瀏覽器 + 打「已存過」記號（記號讓學生端知道：空的就當真的空，不要回退到內建範例） */
+  /* 整份國字注音題庫寫回 D1 */
   function persistWordBank() {
-    try {
-      localStorage.setItem(A.keys.words, JSON.stringify(bankToFlat()));
-      localStorage.setItem("exam_word_bank_saved", "1");
-      return true;
-    } catch (e) { return false; }
+    return cloud().pushBank("words", bankToFlat());
   }
 
   /* ---------- 文意測驗題庫 ---------- */
-  function loadCBank() {
+  async function loadCBank() {
     const grouped = {};
-    PASSAGE_BANK.forEach((item) => { grouped[item.lesson] = item; });
-    try {
-      const saved = localStorage.getItem(A.keys.content);
-      if (saved) {
-        const arr = JSON.parse(saved);
-        const parsed = {};
-        arr.forEach((item) => { parsed[item.lesson] = item; });
-        return parsed;
-      }
-    } catch (e) { /* 忽略 */ }
+    (await cloud().getBank("content")).forEach((item) => { grouped[item.lesson] = item; });
     return grouped;
   }
 
@@ -108,11 +100,7 @@
   }
 
   function persistContentBank() {
-    try {
-      localStorage.setItem(A.keys.content, JSON.stringify(cBankToFlat()));
-      localStorage.setItem("exam_passage_bank_saved", "1");
-      return true;
-    } catch (e) { return false; }
+    return cloud().pushBank("content", cBankToFlat());
   }
 
   /* ---------- 成語題庫 ---------- */
@@ -132,12 +120,8 @@
     return grouped;
   }
 
-  function loadIBank() {
-    try {
-      const saved = localStorage.getItem(A.keys.idioms);
-      if (saved) return groupIdiomsMap(JSON.parse(saved));
-    } catch (e) { /* 忽略 */ }
-    return groupIdiomsMap(IDIOM_BANK);
+  async function loadIBank() {
+    return groupIdiomsMap(await cloud().getBank("idioms"));
   }
 
   function iBankToFlat() {
@@ -158,56 +142,53 @@
   }
 
   function persistIBank() {
+    return cloud().pushBank("idioms", iBankToFlat());
+  }
+
+  /* ---------- 三份題庫一次讀 / 一次存 ---------- */
+  async function reloadAllBanks() {
+    const [bank, cBank, iBank] = await Promise.all([
+      loadBank(), loadCBank(), loadIBank()
+    ]);
+    A.state.bank = bank;
+    A.state.cBank = cBank;
+    A.state.iBank = iBank;
+  }
+
+  /* 國字注音題庫單獨存 */
+  async function saveToCloud() {
     try {
-      localStorage.setItem(A.keys.idioms, JSON.stringify(iBankToFlat()));
-      localStorage.setItem("exam_idiom_bank_saved", "1");
-      return true;
-    } catch (e) { return false; }
-  }
-
-  /* ---------- 三份題庫一次存 / 一次重載 ---------- */
-  function reloadAllBanks() {
-    A.state.bank = loadBank();
-    A.state.cBank = loadCBank();
-    A.state.iBank = loadIBank();
-  }
-
-  function saveToLocal() {
-    if (persistWordBank()) {
-      A.$("save-msg").textContent = "✅ 已存到這台電腦的瀏覽器！";
-    } else {
-      A.$("save-msg").textContent = "⚠️ 儲存失敗，可能是瀏覽器空間不足。";
+      await persistWordBank();
+      A.$("save-msg").textContent = "✅ 國字注音題庫已存到 D1。";
+    } catch (e) {
+      A.$("save-msg").textContent = "⚠️ 儲存失敗：" + e.message;
     }
   }
 
-  /* 國字注音 + 文意測驗 + 成語 一起存到這台電腦 */
-  function saveAllLocal() {
+  /* 國字注音 + 文意測驗 + 成語 一起存到 D1 */
+  async function saveAllToCloud() {
     A.words.collectWordRows();
-    const okWord = persistWordBank();
 
-    let okContent = true;
     const item = A.content.currentContent();
     if (item) {
       const err = A.content.validateContent(item);
       if (err) {
         alert(`⚠️ 文意測驗忘了檢查：「${err}」`);
-        okContent = false;
-      } else {
-        okContent = persistContentBank();
+        return;
       }
-    } else {
-      okContent = persistContentBank();
     }
 
     A.idiom.collectIdiomRows();
-    const okIdiom = persistIBank();
 
-    A.words.renderLessonSelect();
-    A.idiom.renderIdiomLessonSelect();
-    if (okWord && okContent && okIdiom) {
-      A.$("save-msg").textContent = "✅ 三份題庫都已存到這台電腦！要給學生，請按「📤 匯出給學生」取得一份含全部題庫的檔案。";
-    } else {
-      A.$("save-msg").textContent = "⚠️ 儲存失敗，可能是瀏覽器空間不足。";
+    const msg = A.$("save-msg");
+    msg.textContent = "⏳ 儲存中…";
+    try {
+      await Promise.all([persistWordBank(), persistContentBank(), persistIBank()]);
+      A.words.renderLessonSelect();
+      A.idiom.renderIdiomLessonSelect();
+      msg.textContent = "✅ 三份題庫都已存到 D1，學生端下次就讀得到。";
+    } catch (e) {
+      msg.textContent = "⚠️ 儲存失敗：" + e.message;
     }
   }
 
@@ -219,6 +200,13 @@
         (r) => { clearTimeout(timer); resolve(r); },
         (e) => { clearTimeout(timer); reject(e); }
       );
+    });
+  }
+
+  /* 題庫存檔是背景自動觸發（新增/刪除課次等），失敗時不要讓整頁炸掉 */
+  function quiet(promise) {
+    return promise.catch((e) => {
+      if (window.console) console.warn("題庫儲存失敗：", e.message);
     });
   }
 
@@ -234,10 +222,11 @@
     loadIBank,
     iBankToFlat,
     persistIBank,
-    reloadAllBanks
+    reloadAllBanks,
+    quiet
   };
 
-  A.save = { saveToLocal, saveAllLocal };
+  A.save = { saveToCloud, saveAllToCloud };
   A.net = { fetchWithTimeout };
 
 })();

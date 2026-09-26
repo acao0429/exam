@@ -143,7 +143,7 @@
         antonym: r.antonym
       });
     });
-    A.store.persistIBank();
+    A.store.quiet(A.store.persistIBank());
     A.idiom.renderIdiomLessonSelect();
     A.idiom.renderIdiomRows();
     $("save-msg").textContent = `✅ 已把 ${added.length} 筆成語加入「${lesson}」。請檢查後記得按「儲存此課」或「存到這台電腦」。`;

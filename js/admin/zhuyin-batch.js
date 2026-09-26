@@ -130,17 +130,16 @@
       return;
     }
     valid.forEach((r) => S.bank[lesson].push({ char: r.char, zhuyin: r.zhuyin }));
-    try {
-      localStorage.setItem(A.keys.words, JSON.stringify(A.store.bankToFlat()));
+    A.store.persistWordBank().then(() => {
       A.words.renderLessonSelect();
       A.words.renderBatchLessonSelect();
       $("batch-status").textContent = `🎉 已把 ${valid.length} 筆加入「${lesson}」！可以繼續貼下一批，或用「逐字輸入」檢查。`;
       $("batch-preview-wrap").classList.add("hidden");
       $("batch-text").value = "";
       S.batchRows = [];
-    } catch (e) {
-      $("batch-status").textContent = "⚠️ 儲存失敗。";
-    }
+    }).catch((e) => {
+      $("batch-status").textContent = "⚠️ 儲存失敗：" + e.message;
+    });
   }
 
   A.zhuyinBatch = {

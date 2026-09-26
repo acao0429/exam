@@ -45,7 +45,7 @@
     S.iBank[name] = [blankIdiomRow()];
     $("idiom-lesson-name").value = "";
     renderIdiomLessonSelect();
-    A.store.persistIBank();
+    A.store.quiet(A.store.persistIBank());
   }
 
   function deleteIdiomLesson() {
@@ -57,7 +57,7 @@
     if (!ok) return;
     delete S.iBank[lesson];
     renderIdiomLessonSelect();
-    A.store.persistIBank();
+    A.store.quiet(A.store.persistIBank());
     $("save-msg").textContent = `🗑 已刪除「${lesson}」並存進瀏覽器；若要給其他電腦用，別忘了按「📤 匯出給學生」取得含全部題庫的檔。`;
   }
 
@@ -163,12 +163,12 @@
 
   function saveIdiomLesson() {
     collectIdiomRows();
-    if (A.store.persistIBank()) {
+    A.store.persistIBank().then(() => {
       renderIdiomLessonSelect();
-      $("save-msg").textContent = "✅ 成語題庫已儲存！要給學生，按「📤 匯出給學生」取得包含成語的題庫檔。";
-    } else {
-      $("save-msg").textContent = "⚠️ 儲存失敗。";
-    }
+      $("save-msg").textContent = "✅ 成語題庫已儲存到 D1，學生端下次就讀得到。";
+    }).catch((e) => {
+      $("save-msg").textContent = "⚠️ 儲存失敗：" + e.message;
+    });
   }
 
   /* 用內建成語庫一次補齊釋義/注音/近反義（免網路免金鑰） */
