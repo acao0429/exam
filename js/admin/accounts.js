@@ -169,8 +169,8 @@
 
   /* ---------- 刪除帳號（簡單提示 + 最後管理員保護，由後端強制拒絕） ---------- */
   async function deleteTeacher(id, username, role) {
-    // 先取得帳號資料顯示在確認訊息
-    let username = "";
+    const isAdmin = role === "admin";
+    let displayName = username || id;
     try {
       const token = window.ExamCloud.getTeacherToken();
       if (!token) { alert("請先以管理員帳號登入"); return; }
@@ -184,7 +184,6 @@
       }
     } catch (e) {}
     
-    const isAdmin = role === "admin";
     const msg = isAdmin 
       ? `確定要刪除 admin 帳號「${username}」嗎？\n（系統必須保留至少一位 admin）`
       : `確定要刪除帳號「${username}」嗎？`;
@@ -202,11 +201,11 @@
         const errMsg = (data && data.error) || `HTTP ${res.status}`;
         throw new Error(errMsg);
       }
-      const msg = data.relatedStudents 
+      const successMsg = data.relatedStudents 
         ? `✅ 已刪除帳號「${username}」！
 關聯的 ${data.studentCount} 位學生已移除教師歸屬。`
         : `✅ 已刪除帳號「${username}」！`;
-      alert(msg);
+      alert(successMsg);
       loadTeachers();
     } catch (e) {
       // 顯示完整錯誤訊息幫助除錯
