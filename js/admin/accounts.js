@@ -6,7 +6,7 @@
   /* ========== 載入教師清單 ========== */
   async function loadTeachers() {
     if (!window.ExamCloud || !window.ExamCloud.enabled()) {
-      $("accounts-tbody").innerHTML = '<tr><td colspan="6" style="text-align:center;color:#c00">尚未設定 API 網址（js/app-config.js 的 apiBase），無法讀取帳號資料。</td></tr>';
+      $("accounts-tbody").innerHTML = '<tr><td colspan="7" style="text-align:center;color:#c00">尚未設定 API 網址（js/app-config.js 的 apiBase），無法讀取帳號資料。</td></tr>';
       return;
     }
     try {
@@ -19,14 +19,14 @@
       if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
       renderTable(data.teachers || []);
     } catch (e) {
-      $("accounts-tbody").innerHTML = '<tr><td colspan="6" style="text-align:center;color:#c00">讀取失敗：' + e.message + '</td></tr>';
+      $("accounts-tbody").innerHTML = '<tr><td colspan="7" style="text-align:center;color:#c00">讀取失敗：' + e.message + '</td></tr>';
     }
   }
 
   function renderTable(teachers) {
     const tbody = $("accounts-tbody");
     if (!teachers || teachers.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">尚無教師帳號。請使用下方「新增教師」建立。</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center">尚無教師帳號。請使用下方「新增教師」建立。</td></tr>';
       return;
     }
     tbody.innerHTML = teachers.map((t, i) => {
@@ -40,6 +40,8 @@
         '<td>' + (t.className || "—") + '</td>' +
         '<td><span class="badge ' + (t.role === "admin" ? "badge-admin" : "badge-teacher") + '">' + roleLabel + '</span></td>' +
         '<td><span class="badge ' + statusClass + '">' + statusLabel + '</span></td>' +
+        '<td><button class="btn btn-sm btn-blue" onclick="window.Admin.accounts.editClass(' + t.id + ',\'' + (t.className || "") + '\')">修改班級</button></td>' +
+        '<td><button class="btn btn-sm btn-red" onclick="if(confirm(\'確定要刪除帳號「' + (t.username || "") + '」嗎？最後管理員無法刪除自己。\')) window.Admin.accounts.deleteTeacher(' + t.id + ')">刪除</button></td>' +
         '<td><button class="btn btn-sm btn-blue" onclick="window.Admin.accounts.resetPw(' + t.id + ',\'' + (t.username || "") + '\')">重設密碼</button></td>' +
         '<td><button class="btn btn-sm ' + (t.isActive ? 'btn-red' : 'btn-green') + '" onclick="window.Admin.accounts.toggleActive(' + t.id + ', ' + (!t.isActive) + ')">' + (t.isActive ? "停用" : "啟用") + '</button></td>' +
         '</tr>';
@@ -91,11 +93,7 @@
       if (!token) throw new Error("請先以管理員帳號登入");
       const res = await fetch(window.APP_CONFIG.apiBase + "/api/teachers", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: "Bearer " + token,
-          "x-teacher-token": token
-        },
+        headers: { "content-type": "application/json", authorization: "Bearer " + token, "x-teacher-token": token },
         body: JSON.stringify({ username, name, className, password, role: isAdmin ? "admin" : "teacher" })
       });
       const data = await res.json();
@@ -148,6 +146,46 @@
     }
   }
 
+  /* ---------- 修改班級（直接輸入新班級名，後端 trigger 自動建立 classes） ---------- */
+  async function editClass(id, currentClassName) {
+    const newName = prompt("請輸入新班級名稱（可留空，會自動建立 classes 記錄）：", currentClassName || "");
+    if (newName === null) return; // 取消
+    try {
+      const token = window.ExamCloud.getTeacherToken();
+      if (!token) throw new Error("請先以管理員帳號登入");
+      const res = await fetch(window.APP_CONFIG.apiBase + "/api/teachers/" + id, {
+        method: "PUT",
+        headers: { "content-type": "application/json", authorization: "Bearer " + token, "x-teacher-token": token },
+        body: JSON.stringify({ className: newName })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
+      alert("✅ 已修改帳號「" + id + "」的班級為：「" + newName + "」");
+      loadTeachers();
+    } catch (e) {
+      alert("❌ 修改班級失敗：" + e.message);
+    }
+  }
+
+  /* ---------- 刪除帳號（簡單提示 + 最後管理員保護，由後端強制拒絕） ---------- */
+  async function deleteTeacher(id) {
+    if (!confirm("確定要刪除帳號「" + id + "」嗎？最後管理員無法刪除自己。")) return;
+    try {
+      const token = window.ExamCloud.getTeacherToken();
+      if (!token) throw new Error("請先以管理員帳號登入");
+      const res = await fetch(window.APP_CONFIG.apiBase + "/api/teachers/" + id, {
+        method: "DELETE",
+        headers: { authorization: "Bearer " + token, "x-teacher-token": token }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
+      alert("✅ 已刪除（停用）帳號「" + id + "」");
+      loadTeachers();
+    } catch (e) {
+      alert("❌ 刪除失敗：" + e.message);
+    }
+  }
+
   A.accounts = {
     render: async function () {
       const box = document.getElementById("tab-accounts");
@@ -163,6 +201,8 @@
     createTeacher: createTeacher,
     resetPw: resetPw,
     toggleActive: toggleActive,
+    editClass: editClass,
+    deleteTeacher: deleteTeacher,
     loadTeachers: loadTeachers
   };
 })();
