@@ -627,6 +627,17 @@ export default {
           "SUM(CASE WHEN a.correct = 1 THEN 1 ELSE 0 END) AS correct " +
           "FROM students s LEFT JOIN attempts a ON a.student_id = s.id WHERE 1=1";
         const params = [];
+        const urlObj = new URL(request.url);
+        const period = urlObj.searchParams.get("period") || "";
+        if (["day", "week", "month", "year"].includes(period)) {
+          let modifier = "-365 days";
+          if (period === "day") modifier = "start of day";
+          else if (period === "week") modifier = "-7 days";
+          else if (period === "month") modifier = "-1 month";
+          else if (period === "year") modifier = "-1 year";
+          queryStr += " AND (a.created_at IS NULL OR a.created_at >= datetime('now', ?) )";
+          params.push(modifier);
+        }
         if (!scope.all && scope.classId) {
           queryStr += " AND s.class_id = ?";
           params.push(scope.classId);

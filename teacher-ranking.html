@@ -19,14 +19,26 @@
     <div class="panel" style="max-width:440px; margin:0 auto">
       <h2>🏆 本班答對題數排名</h2>
       <p class="hint">只顯示老師自己班級的學生，依答對題數由多到少排序。</p>
-      <table class="word-table" style="margin-top:12px">
-        <thead>
-          <tr><th>排名</th><th>座號</th><th>答對數</th><th>總題數</th></tr>
-        </thead>
-        <tbody id="ranking-tbody">
-          <tr><td colspan="4" style="text-align:center">載入中…</td></tr>
-        </tbody>
-      </table>
+        <table class="word-table" style="margin-top:12px">
+          <thead>
+            <tr><th>期間</th><th></th></tr>
+            <tr><th></th><th></th></tr>
+          </thead>
+        </table>
+        <div class="center" style="margin-top:8px; gap:8px; flex-wrap:wrap">
+          <button class="btn btn-sm btn-blue" onclick="loadRanking('day')">📅 今日</button>
+          <button class="btn btn-sm btn-blue" onclick="loadRanking('week')">📅 本週</button>
+          <button class="btn btn-sm btn-blue" onclick="loadRanking('month')">📅 本月</button>
+          <button class="btn btn-sm btn-blue" onclick="loadRanking('year')">📅 本年</button>
+        </div>
+        <table class="word-table" style="margin-top:12px">
+          <thead>
+            <tr><th>排名</th><th>座號</th><th>答對數</th><th>總題數</th></tr>
+          </thead>
+          <tbody id="ranking-tbody">
+            <tr><td colspan="4" style="text-align:center">載入中…</td></tr>
+          </tbody>
+        </table>
       <div class="center" style="margin-top:12px">
         <button class="btn btn-blue btn-sm" id="ranking-refresh">🔄 重新整理</button>
       </div>

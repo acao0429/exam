@@ -78,12 +78,14 @@
     });
   }
 
-  /* ---------- 載入 ---------- */
-  async function loadRanking() {
+  /* ---------- 載入（支援時間篩選） ---------- */
+  async function loadRanking(period) {
     const tbody = $("ranking-tbody");
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">載入中…</td></tr>';
-    $("ranking-msg").textContent = "";    try {
-      const res = await fetch(apiBase() + "/api/ranking", { headers: authHeaders() });
+    $("ranking-msg").textContent = "";
+    try {
+      const url = apiBase() + "/api/ranking" + (period ? "?period=" + period : "");
+      const res = await fetch(url, { headers: authHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
       renderRanking(data.ranking);
@@ -92,9 +94,11 @@
     }
   }
 
+  window.loadRanking = loadRanking;
+
   document.addEventListener("DOMContentLoaded", () => {
     if (!requireLogin()) return;
     loadRanking();
-    $("ranking-refresh").addEventListener("click", loadRanking);
+    $("ranking-refresh").addEventListener("click", () => loadRanking());
   });
 })();
