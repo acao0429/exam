@@ -41,7 +41,7 @@
         '<td><span class="badge ' + (t.role === "admin" ? "badge-admin" : "badge-teacher") + '">' + roleLabel + '</span></td>' +
         '<td><span class="badge ' + statusClass + '">' + statusLabel + '</span></td>' +
         '<td><button class="btn btn-sm btn-blue" onclick="window.Admin.accounts.editClass(' + t.id + ',\'' + (t.className || "") + '\')">修改班級</button></td>' +
-        '<td><button class="btn btn-sm btn-red" onclick="if(confirm(\'確定要刪除帳號「' + (t.username || "") + '」嗎？最後管理員無法刪除自己。\')) window.Admin.accounts.deleteTeacher(' + t.id + ')">刪除</button></td>' +
+        '<td><button class="btn btn-sm btn-red" onclick="window.Admin.accounts.deleteTeacher(' + t.id + ',\'' + (t.username || "") + '\',\'' + (t.role || "") + '\')" title="只能刪除非 admin 或不是最後一位 admin">刪除</button></td>' +
         '<td><button class="btn btn-sm btn-blue" onclick="window.Admin.accounts.resetPw(' + t.id + ',\'' + (t.username || "") + '\')">重設密碼</button></td>' +
         '<td><button class="btn btn-sm ' + (t.isActive ? 'btn-red' : 'btn-green') + '" onclick="window.Admin.accounts.toggleActive(' + t.id + ', ' + (!t.isActive) + ')">' + (t.isActive ? "停用" : "啟用") + '</button></td>' +
         '</tr>';
@@ -168,8 +168,28 @@
   }
 
   /* ---------- 刪除帳號（簡單提示 + 最後管理員保護，由後端強制拒絕） ---------- */
-  async function deleteTeacher(id) {
-    if (!confirm("確定要刪除帳號「" + id + "」嗎？最後管理員無法刪除自己。")) return;
+  async function deleteTeacher(id, username, role) {
+    // 先取得帳號資料顯示在確認訊息
+    let username = "";
+    try {
+      const token = window.ExamCloud.getTeacherToken();
+      if (!token) { alert("請先以管理員帳號登入"); return; }
+      const res = await fetch(window.APP_CONFIG.apiBase + "/api/teachers", {
+        headers: { authorization: "Bearer " + token, "x-teacher-token": token }
+      });
+      const data = await res.json();
+      if (res.ok && data.teachers) {
+        const t = data.teachers.find(t => t.id === id);
+        if (t) username = t.username || t.id;
+      }
+    } catch (e) {}
+    
+    const isAdmin = role === "admin";
+    const msg = isAdmin 
+      ? `確定要刪除 admin 帳號「${username}」嗎？\n（系統必須保留至少一位 admin）`
+      : `確定要刪除帳號「${username}」嗎？`;
+    if (!confirm(msg)) return;
+    
     try {
       const token = window.ExamCloud.getTeacherToken();
       if (!token) throw new Error("請先以管理員帳號登入");
@@ -178,11 +198,15 @@
         headers: { authorization: "Bearer " + token, "x-teacher-token": token }
       });
       const data = await res.json();
-      if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
-      alert("✅ 已刪除（停用）帳號「" + id + "」");
+      if (!res.ok) {
+        const errMsg = (data && data.error) || `HTTP ${res.status}`;
+        throw new Error(errMsg);
+      }
+      alert("✅ 已成功停用帳號（ID=" + id + "）");
       loadTeachers();
     } catch (e) {
-      alert("❌ 刪除失敗：" + e.message);
+      // 顯示完整錯誤訊息幫助除錯
+      alert("❌ 刪除失敗：" + e.message + "\n\n可能原因：\n• 不能刪除自己的帳號\n• 你是最後一位 admin\n• Token 已過期，請重新登入");
     }
   }
 
