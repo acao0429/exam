@@ -635,7 +635,7 @@ export default {
           else if (period === "week") modifier = "-7 days";
           else if (period === "month") modifier = "-1 month";
           else if (period === "year") modifier = "-1 year";
-          queryStr += " AND (a.created_at IS NULL OR a.created_at >= datetime('now', ?) )";
+          queryStr += " AND (a.answered_at IS NULL OR a.answered_at >= datetime('now', ?) )";
           params.push(modifier);
         }
         if (!scope.all && scope.classId) {

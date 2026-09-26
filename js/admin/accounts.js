@@ -1,16 +1,168 @@
 (function () {
   "use strict";
   const A = window.Admin;
+  const $ = A.$;
+
+  /* ========== 載入教師清單 ========== */
+  async function loadTeachers() {
+    if (!window.ExamCloud || !window.ExamCloud.enabled()) {
+      $("accounts-tbody").innerHTML = '<tr><td colspan="6" style="text-align:center;color:#c00">尚未設定 API 網址（js/app-config.js 的 apiBase），無法讀取帳號資料。</td></tr>';
+      return;
+    }
+    try {
+      const token = window.ExamCloud.getTeacherToken();
+      if (!token) throw new Error("請先以管理員帳號登入");
+      const res = await fetch(window.APP_CONFIG.apiBase + "/api/teachers", {
+        headers: { authorization: "Bearer " + token, "x-teacher-token": token, accept: "application/json" }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
+      renderTable(data.teachers || []);
+    } catch (e) {
+      $("accounts-tbody").innerHTML = '<tr><td colspan="6" style="text-align:center;color:#c00">讀取失敗：' + e.message + '</td></tr>';
+    }
+  }
+
+  function renderTable(teachers) {
+    const tbody = $("accounts-tbody");
+    if (!teachers || teachers.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">尚無教師帳號。請使用下方「新增教師」建立。</td></tr>';
+      return;
+    }
+    tbody.innerHTML = teachers.map((t, i) => {
+      const roleLabel = t.role === "admin" ? "管理員" : "教師";
+      const statusLabel = t.isActive ? "啟用" : "停用";
+      const statusClass = t.isActive ? "status-on" : "status-off";
+      return '<tr>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td>' + (t.username || "") + '</td>' +
+        '<td>' + (t.name || "") + '</td>' +
+        '<td>' + (t.className || "—") + '</td>' +
+        '<td><span class="badge ' + (t.role === "admin" ? "badge-admin" : "badge-teacher") + '">' + roleLabel + '</span></td>' +
+        '<td><span class="badge ' + statusClass + '">' + statusLabel + '</span></td>' +
+        '<td><button class="btn btn-sm btn-blue" onclick="window.Admin.accounts.resetPw(' + t.id + ',\'' + (t.username || "") + '\')">重設密碼</button></td>' +
+        '<td><button class="btn btn-sm ' + (t.isActive ? 'btn-red' : 'btn-green') + '" onclick="window.Admin.accounts.toggleActive(' + t.id + ', ' + (!t.isActive) + ')">' + (t.isActive ? "停用" : "啟用") + '</button></td>' +
+        '</tr>';
+    }).join("");
+  }
+
+  /* ========== 新增教師表單 ========== */
+  function showAddForm() {
+    const wrap = document.getElementById("add-teacher-form-wrap");
+    if (!wrap) {
+      const panel = document.querySelector("#tab-accounts .panel");
+      if (!panel) return;
+      const div = document.createElement("div");
+      div.id = "add-teacher-form-wrap";
+      div.style.marginTop = "12px";
+      div.innerHTML = `
+        <div style="background:#f0f4f8;padding:12px;border-radius:6px;border:1px solid #dde;">
+          <h4 style="margin:0 0 8px">➕ 新增教師帳號</h4>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="new-username" placeholder="登入帳號（2~32 字）" style="flex:1 1 120px;padding:6px;border:1px solid #ccc;border-radius:4px">
+            <input id="new-name" placeholder="老師姓名" style="flex:1 1 120px;padding:6px;border:1px solid #ccc;border-radius:4px">
+            <input id="new-class" placeholder="班級名稱（可留空）" style="flex:1 1 120px;padding:6px;border:1px solid #ccc;border-radius:4px">
+            <input id="new-password" placeholder="密碼（至少 6 字）" type="password" style="flex:1 1 120px;padding:6px;border:1px solid #ccc;border-radius:4px">
+            <label style="font-size:12px;color:#555;align-self:center"><input id="new-is-admin" type="checkbox"> 管理員</label>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="btn btn-blue btn-sm" onclick="window.Admin.accounts.createTeacher()">建立帳號</button>
+            <button class="btn btn-gray btn-sm" onclick="document.getElementById('add-teacher-form-wrap').remove()">取消</button>
+          </div>
+          <p id="new-teacher-msg" style="margin-top:6px;font-size:12px;color:#c00"></p>
+        </div>`;
+      panel.appendChild(div);
+    }
+  }
+
+  async function createTeacher() {
+    const username = String(document.getElementById("new-username").value || "").trim();
+    const name = String(document.getElementById("new-name").value || "").trim();
+    const className = String(document.getElementById("new-class").value || "").trim();
+    const password = String(document.getElementById("new-password").value || "").trim();
+    const isAdmin = document.getElementById("new-is-admin").checked;
+    const msgEl = document.getElementById("new-teacher-msg");
+    msgEl.textContent = "";
+    if (!username) { msgEl.textContent = "請輸入登入帳號"; return; }
+    if (!name) { msgEl.textContent = "請輸入姓名"; return; }
+    if (password.length < 6) { msgEl.textContent = "密碼至少 6 個字元"; return; }
+    try {
+      const token = window.ExamCloud.getTeacherToken();
+      if (!token) throw new Error("請先以管理員帳號登入");
+      const res = await fetch(window.APP_CONFIG.apiBase + "/api/teachers", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer " + token,
+          "x-teacher-token": token
+        },
+        body: JSON.stringify({ username, name, className, password, role: isAdmin ? "admin" : "teacher" })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
+      msgEl.style.color = "#080";
+      msgEl.textContent = "✅ 已建立教師帳號：" + username + (isAdmin ? "（管理員）" : "");
+      loadTeachers();
+    } catch (e) {
+      msgEl.textContent = "❌ 建立失敗：" + e.message;
+    }
+  }
+
+  async function resetPw(id, username) {
+    const pw = prompt("請輸入「" + username + "」的新密碼（至少 6 字）：", "");
+    if (!pw) return;
+    if (pw.length < 6) { alert("密碼至少 6 個字元"); return; }
+    try {
+      const token = window.ExamCloud.getTeacherToken();
+      if (!token) throw new Error("請先以管理員帳號登入");
+      const res = await fetch(window.APP_CONFIG.apiBase + "/api/teachers/" + id + "/password", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer " + token, "x-teacher-token": token },
+        body: JSON.stringify({ password: pw })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
+      alert("✅ 已重設「" + username + "」的密碼，該老師所有裝置已登出。");
+    } catch (e) {
+      alert("❌ 重設密碼失敗：" + e.message);
+    }
+  }
+
+  async function toggleActive(id, isActive) {
+    const label = isActive ? "啟用" : "停用";
+    if (!confirm("確定要將帳號「" + id + "」" + label + "嗎？")) return;
+    try {
+      const token = window.ExamCloud.getTeacherToken();
+      if (!token) throw new Error("請先以管理員帳號登入");
+      const res = await fetch(window.APP_CONFIG.apiBase + "/api/teachers/" + id, {
+        method: "PUT",
+        headers: { "content-type": "application/json", authorization: "Bearer " + token, "x-teacher-token": token },
+        body: JSON.stringify({ isActive })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data && data.error) || "HTTP " + res.status);
+      loadTeachers();
+      alert("✅ 已將帳號「" + id + "」" + label);
+    } catch (e) {
+      alert("❌ 操作失敗：" + e.message);
+    }
+  }
+
   A.accounts = {
-    render: function () {
+    render: async function () {
       const box = document.getElementById("tab-accounts");
       if (!box) return;
       box.innerHTML = '\
-        <div class="panel"><h2>👑 管理員帳號與班級管理</h2>\
-        <p class="hint">（管理員專用）可建立教師帳號、設定班級、停用帳號、重設密碼。</p>\
-        <p>此頁面將由後台管理員使用，目前為骨架。已在雲端設定角色與 classes 表。</p>\
-        <button class="btn btn-blue" onclick="alert(\'帳號管理介面：請在後台直接呼叫 /api/teachers 等 API 管理\')">📋 查看目前教師列表（可擴充為表格）</button>\
+        <div class="panel"><h2>👑 帳號與班級管理（管理員專用）</h2>\
+        <button class="btn btn-blue" onclick="window.Admin.accounts.showAddForm()">➕ 新增教師帳號</button>\
+        <table class="word-table" style="margin-top:12px;width:100%"><thead><tr><th>#</th><th>登入帳號</th><th>姓名</th><th>班級</th><th>角色</th><th>狀態</th><th>操作</th></tr></thead><tbody id="accounts-tbody"><tr><td colspan="7">載入中…</td></tr></tbody></table>\
         </div>';
-    }
+      await loadTeachers();
+    },
+    showAddForm: showAddForm,
+    createTeacher: createTeacher,
+    resetPw: resetPw,
+    toggleActive: toggleActive,
+    loadTeachers: loadTeachers
   };
 })();
