@@ -202,7 +202,11 @@
         const errMsg = (data && data.error) || `HTTP ${res.status}`;
         throw new Error(errMsg);
       }
-      alert("✅ 已成功停用帳號（ID=" + id + "）");
+      const msg = data.relatedStudents 
+        ? `✅ 已刪除帳號「${username}」！
+關聯的 ${data.studentCount} 位學生已移除教師歸屬。`
+        : `✅ 已刪除帳號「${username}」！`;
+      alert(msg);
       loadTeachers();
     } catch (e) {
       // 顯示完整錯誤訊息幫助除錯

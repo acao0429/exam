@@ -979,7 +979,7 @@ export default {
           const ctx = await requireTeacher(request, env);
           requireAdmin(ctx);
           const id = Number(m[1]);
-          if (id === ctx.teacher.id) throw httpError(400, "不能停用自己的帳號");
+          if (id === ctx.teacher.id) throw httpError(400, "不能刪除自己的帳號");
           const t = await env.DB.prepare("SELECT id, role, is_active FROM teachers WHERE id = ?").bind(id).first();
           if (!t) throw httpError(404, "找不到這位老師");
           if (t.is_active) {
@@ -990,12 +990,24 @@ export default {
               throw httpError(400, "系統至少要保留一位啟用中的管理員");
             }
           }
-          /* 採「停用」而非刪除，保留學生的 teacher_id 關聯與歷史 */
+          /* 檢查是否有學生關聯 */
+          const studentCount = await env.DB.prepare(
+            "SELECT COUNT(*) AS cnt FROM students WHERE teacher_id = ?"
+          ).bind(id).first();
+          const relatedStudents = studentCount && studentCount.cnt > 0;
+          /* 真正刪除：移除老師、清除 sessions、清空學生的 teacher_id */
           await env.DB.batch([
-            env.DB.prepare("UPDATE teachers SET is_active = 0 WHERE id = ?").bind(id),
-            env.DB.prepare("DELETE FROM teacher_sessions WHERE teacher_id = ?").bind(id)
+            env.DB.prepare("DELETE FROM teachers WHERE id = ?").bind(id),
+            env.DB.prepare("DELETE FROM teacher_sessions WHERE teacher_id = ?").bind(id),
+            env.DB.prepare("UPDATE students SET teacher_id = NULL WHERE teacher_id = ?").bind(id)
           ]);
-          return json(request, { ok: true, id, deactivated: true });
+          return json(request, { 
+            ok: true, 
+            id, 
+            deleted: true, 
+            relatedStudents: relatedStudents,
+            studentCount: relatedStudents ? studentCount.cnt : 0
+          });
         }
       }
 
