@@ -129,6 +129,24 @@ body {
 }
 .word-table input:focus, .word-table textarea:focus { outline: none; border-color: #ff8fab; }
 
+/* 學生名單表格（8 欄）
+   .word-table 預設的欄寬是為「國字/注音/詞義」三欄表設計的
+   （20% / 26% / 42%），套到 8 欄會讓勾選欄和座號、姓名過寬，
+   所以這裡覆寫成適合名單的欄寬。 */
+.word-table.student-table th,
+.word-table.student-table td { white-space: nowrap; }
+.word-table.student-table td:nth-child(1) { width: 34px; }   /* 勾選 */
+.word-table.student-table td:nth-child(2) { width: 62px; }   /* 座號 */
+.word-table.student-table td:nth-child(3) { width: auto; }   /* 姓名：吃剩餘空間 */
+.word-table.student-table td:nth-child(4) { width: 96px; }   /* 所屬老師 */
+.word-table.student-table td:nth-child(5) { width: 62px; }   /* 總作答 */
+.word-table.student-table td:nth-child(6) { width: 62px; }   /* 答對數 */
+.word-table.student-table td:nth-child(7) { width: 68px; }   /* 正確率 */
+.word-table.student-table td:nth-child(8) { width: 190px; }  /* 操作 */
+.word-table.student-table td.stu-name { text-align: left; padding-left: 12px; }
+.word-table.student-table td.stu-teacher { font-size: 14px; color: #6b5b73; }
+.word-table.student-table select { padding: 5px 6px; font-size: 13px; }
+
 /* 成語表格 */
 .idiom-table td:first-child { width: 13%; }
 .idiom-table td:nth-child(2) { width: 24%; }

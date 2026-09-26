@@ -1,7 +1,7 @@
 /* ============================================================
    統一登入頁（login.html）
    學生：座號＋密碼 → 學生首頁 index.html
-   老師：帳號＋密碼 → 老師首頁 teacher.html
+   老師：帳號＋密碼 → 題庫管理 admin.html（上方為老師首頁頂欄）
    已登入狀態下開啟本頁 → 自動跳轉對應首頁
    ============================================================ */
 
@@ -55,7 +55,7 @@
       localStorage.setItem(TEACHER_TOKEN_KEY, data.token);
       window.ExamCloud.setTeacherToken(data.token);
       localStorage.setItem("exam_teacher_info", JSON.stringify(data.teacher));
-      location.replace("teacher.html");
+      location.replace("admin.html");
     } catch (e) {
       showError("❌ " + e.message);
     }
@@ -64,7 +64,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     // 已登入：直接跳對應首頁
     if (localStorage.getItem(STUDENT_TOKEN_KEY)) { location.replace("index.html"); return; }
-    if (localStorage.getItem(TEACHER_TOKEN_KEY)) { location.replace("teacher.html"); return; }
+    if (localStorage.getItem(TEACHER_TOKEN_KEY)) { location.replace("admin.html"); return; }
 
     switchRole("student");
     $("tab-student").addEventListener("click", () => switchRole("student"));

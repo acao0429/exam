@@ -8,10 +8,12 @@
 </head>
 <body>
   <header class="quiz-header">
-    <a class="back" href="index.html">⬅ 回首頁</a>
-    <h1>🛠 老師後台</h1>
+    <h1>🧑‍🏫 老師首頁</h1>
     <span class="header-mascot">
+      <span id="teacher-welcome-text" style="display:none;font-weight:bold;margin-right:8px"></span>
       <span id="teacher-class-badge" style="display:none;margin-right:8px;font-size:13px;color:#555"></span>
+      <a class="topbar-login" id="ranking-link" href="teacher-ranking.html" style="display:none;margin-left:8px">🏆 排名</a>
+      <a class="topbar-login" id="change-pwd-link" href="teacher-password.html" style="display:none;margin-left:8px">🔑 修改密碼</a>
       <button class="btn btn-sm btn-gray" id="logout-btn" style="display:none">🚪 登出</button>
       🧑🏫
     </span>
@@ -132,7 +134,7 @@
              </div>
 
              <p class="hint" style="margin-bottom:14px">
-               🤖 AI 金鑰與模型設定請至 <a href="#" onclick="switchTab('ai-settings');return false;" style="color:inherit;font-weight:bold">「🤖 AI 設定」分頁</a> 統一管理。
+               🤖 AI 金鑰與模型設定請至 <a href="#" id="link-ai-settings" style="color:inherit;font-weight:bold">「🤖 AI 設定」分頁</a> 統一管理。
              </p>
              <div class="center" style="margin-bottom:14px">
                <button class="btn btn-blue" id="gen-btn">✨ 自動出題</button>
@@ -257,11 +259,38 @@
           <h2>👨‍🎓 學生帳號管理</h2>
           <p class="hint">可批次建檔（貼名單）、重設密碼、刪除、查看作答統計。</p>
 
+          <div class="panel" style="background:#f7fbff;margin-top:12px;padding:16px">
+            <div class="form-row">
+              <label>🏫 我的班級</label>
+              <input type="text" id="my-class-input" placeholder="例如：預設班級 或 1-1" style="flex:1">
+              <button class="btn btn-sm btn-blue" id="save-my-class-btn">💾 儲存班級</button>
+              <span id="my-class-msg" class="hint"></span>
+            </div>
+            <p class="hint">班級名稱<strong>相同</strong>的老師會看到同一份學生名單與排名（可多位老師共用一個班）。</p>
+
+            <div class="form-row" style="margin-top:8px">
+              <label>🧲 未分班學生</label>
+              <button class="btn btn-sm btn-gray" id="claim-students-btn">移入我的班級</button>
+              <span id="claim-msg" class="hint"></span>
+            </div>
+            <p class="hint">把「班級為空」的舊學生一次性歸到我的班級（他們才會出現在排名與名單裡）。</p>
+
+            <div class="form-row" style="margin-top:8px">
+              <label>👤 學生所屬老師</label>
+              <select id="assign-teacher-select" style="flex:1"></select>
+              <button class="btn btn-sm btn-blue" id="assign-teacher-btn">套用到勾選的學生</button>
+              <span id="assign-teacher-msg" class="hint"></span>
+            </div>
+            <p class="hint">兩種方式：<strong>①</strong> 直接在下方名單的「所屬老師」欄選單逐一調整；<strong>②</strong> 先在名單勾選學生（可按左上角全選），再選老師按「套用到勾選的學生」批次處理。</p>
+            <p class="hint">這只是名單上的管理標記，不影響排名或名單的可見範圍（依班級判斷）。</p>
+          </div>
+
            <div class="form-row">
              <label>📝 批次建檔 / 貼名單</label>
              <textarea id="student-list-text" rows="6" placeholder="每行一筆，格式：座號,姓名&#10;例如：&#10;01,王小明&#10;02,李小華&#10;03,張小燕"></textarea>
              <div class="form-row">
                <input type="text" id="default-password" placeholder="統一密碼（可選）">
+               <select id="create-teacher-select" style="max-width:190px"></select>
                <button class="btn btn-blue btn-sm" id="batch-create-btn">➕ 批次建檔</button>
              </div>
              <p class="hint" style="margin-top:6px">或以 Excel 上傳（每列一筆；第一列為標題：座號 / 姓名 / 密碼）。</p>
@@ -286,10 +315,11 @@
               <button class="btn btn-sm btn-blue" id="load-students-btn">🔄 載入學生</button>
               <span id="student-count" class="hint"></span>
             </div>
-            <table class="word-table" id="students-table">
+            <table class="word-table student-table" id="students-table">
               <thead>
                 <tr>
-                  <th>座號</th><th>姓名</th><th>總作答</th><th>答對數</th><th>正確率</th><th>操作</th>
+                  <th><input type="checkbox" id="select-all-students" title="全選／取消全選"></th>
+                  <th>座號</th><th>姓名</th><th>所屬老師</th><th>總作答</th><th>答對數</th><th>正確率</th><th>操作</th>
                 </tr>
               </thead>
               <tbody id="students-tbody"></tbody>
@@ -364,6 +394,19 @@
   <script src="js/offline-idioms.js"></script>
   <script src="js/gen-questions.js"></script>
   <script src="js/gen-idioms.js"></script>
-  <script src="js/admin.js"></script>
+
+  <!-- 老師後台：依序載入，core.js 先建立共用狀態，最後 main.js 負責啟動 -->
+  <script src="js/admin/core.js"></script>
+  <script src="js/admin/words.js"></script>
+  <script src="js/admin/zhuyin-batch.js"></script>
+  <script src="js/admin/content.js"></script>
+  <script src="js/admin/idiom-bank.js"></script>
+  <script src="js/admin/idiom-batch.js"></script>
+  <script src="js/admin/ai-settings.js"></script>
+  <script src="js/admin/ai-generate.js"></script>
+  <script src="js/admin/transfer.js"></script>
+  <script src="js/admin/cloud-sync.js"></script>
+  <script src="js/admin/students.js"></script>
+  <script src="js/admin/main.js"></script>
 </body>
 </html>

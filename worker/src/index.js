@@ -14,6 +14,8 @@
      POST /api/teacher/logout
      GET  /api/teacher/me          → 目前登入老師
      POST /api/teacher/password    → 改密碼
+     PUT  /api/teacher/class       → 改自己的班級名稱（可一併搬移現有學生）
+     GET  /api/teachers            → 全部老師（學生管理指定「所屬老師」用）
      GET  /api/ai/settings         → AI 設定（provider / hasKey / model）
      POST /api/ai/settings         → 存某家 AI 提供者的金鑰 / model
      POST /api/ai/test             → 伺服器端測試 AI 連線
@@ -22,8 +24,14 @@
      GET  /api/students            → 只看自己班的學生
      POST /api/students            → 建學生（附帶班級）
      POST /api/students/password   → 重設密碼
+     POST /api/students/claim      → 把「未分班」學生移入我的班級
+     POST /api/students/assign-teacher → 指定學生所屬老師（標記用）
      DELETE /api/students          → 刪學生
      GET  /api/stats               → 只看自己班的統計
+
+   班級規則：班級名稱相同的多位老師會看到同一份學生名單與排名。
+   students.teacher_id 只是「這位學生由哪位老師管理」的標記欄位，
+   不影響名單與排名的篩選（篩選以 class_name 為準）。
 
    學生驗證（student session token）：
      POST /api/student/login
@@ -510,6 +518,35 @@ export default {
         const ctx = await requireTeacher(request, env);
         return json({ teacher: ctx.teacher });
       }
+      if (path === "/api/teacher/class" && method === "PUT") {
+        const ctx = await requireTeacher(request, env);
+        const b = await request.json();
+        const className = String((b && b.className) || "").trim();
+        if (!className) throw httpError(400, "班級名稱不能為空");
+        const oldName = ctx.teacher.className;
+        const moveStudents = !!(b && b.moveStudents) && oldName !== className;
+        const stmts = [
+          env.DB.prepare("UPDATE teachers SET class_name = ? WHERE id = ?").bind(className, ctx.teacher.id)
+        ];
+        if (moveStudents) {
+          stmts.push(
+            env.DB.prepare("UPDATE students SET class_name = ? WHERE class_name = ?").bind(className, oldName)
+          );
+        }
+        await env.DB.batch(stmts);
+        return json({ ok: true, className, previousClassName: oldName, movedStudents: moveStudents });
+      }
+      if (path === "/api/teachers" && method === "GET") {
+        await requireTeacher(request, env);
+        const rows = await env.DB.prepare(
+          "SELECT id, username, name, class_name FROM teachers ORDER BY id"
+        ).all();
+        return json({
+          teachers: (rows.results || []).map((t) => ({
+            id: t.id, username: t.username, name: t.name, className: t.class_name
+          }))
+        });
+      }
       if (path === "/api/teacher/password" && method === "POST") {
         const ctx = await requireTeacher(request, env);
         const b = await request.json();
@@ -611,10 +648,13 @@ export default {
       if (path === "/api/students" && method === "GET") {
         const ctx = await requireTeacher(request, env);
         const rows = await env.DB.prepare(
-          "SELECT s.id, s.seat, s.name, s.class_name, s.created_at AS createdAt, " +
+          "SELECT s.id, s.seat, s.name, s.class_name, s.teacher_id, " +
+          "t.name AS teacher_name, t.username AS teacher_username, " +
+          "s.created_at AS createdAt, " +
           "(SELECT COUNT(*) FROM attempts a WHERE a.student_id = s.id) AS total, " +
           "(SELECT SUM(CASE WHEN a.correct = 1 THEN 1 ELSE 0 END) FROM attempts a WHERE a.student_id = s.id) AS correct " +
-          "FROM students s WHERE s.class_name = ? ORDER BY s.seat"
+          "FROM students s LEFT JOIN teachers t ON t.id = s.teacher_id " +
+          "WHERE s.class_name = ? ORDER BY CAST(s.seat AS INTEGER), s.seat"
         ).bind(ctx.teacher.className).all();
         return json({ students: rows.results || [] });
       }
@@ -629,12 +669,13 @@ export default {
           const name = String((it && it.name) || "");
           const pass = String((it && it.password) || defaultPassword);
           if (!seat || !pass) continue;
+          const teacherId = it && it.teacherId ? Number(it.teacherId) : ctx.teacher.id;
           const salt = randomHex(16);
           stmts.push(env.DB.prepare(
-            "INSERT INTO students (seat, name, password_salt, password_hash, class_name) VALUES (?, ?, ?, ?, ?) " +
+            "INSERT INTO students (seat, name, password_salt, password_hash, class_name, teacher_id) VALUES (?, ?, ?, ?, ?, ?) " +
             "ON CONFLICT(seat) DO UPDATE SET name = excluded.name, password_salt = excluded.password_salt, " +
-            "password_hash = excluded.password_hash, class_name = excluded.class_name"
-          ).bind(seat, name, salt, await hashPassword(pass, salt), ctx.teacher.className));
+            "password_hash = excluded.password_hash, class_name = excluded.class_name, teacher_id = excluded.teacher_id"
+          ).bind(seat, name, salt, await hashPassword(pass, salt), ctx.teacher.className, teacherId));
         }
         if (stmts.length) await env.DB.batch(stmts);
         return json({ ok: true, imported: stmts.length });
@@ -655,6 +696,29 @@ export default {
           "UPDATE students SET password_salt = ?, password_hash = ? WHERE seat = ?"
         ).bind(salt, await hashPassword(pass, salt), seat).run();
         return json({ ok: true });
+      }
+      if (path === "/api/students/claim" && method === "POST") {
+        const ctx = await requireTeacher(request, env);
+        const res = await env.DB.prepare(
+          "UPDATE students SET class_name = ?, teacher_id = COALESCE(teacher_id, ?) " +
+          "WHERE class_name IS NULL OR TRIM(class_name) = ''"
+        ).bind(ctx.teacher.className, ctx.teacher.id).run();
+        return json({ ok: true, claimed: (res.meta && res.meta.changes) || 0, className: ctx.teacher.className });
+      }
+      if (path === "/api/students/assign-teacher" && method === "POST") {
+        const ctx = await requireTeacher(request, env);
+        const b = await request.json();
+        const seats = (Array.isArray(b && b.seats) ? b.seats : []).map(String).filter(Boolean);
+        const teacherId = Number(b && b.teacherId) || 0;
+        if (!seats.length) throw httpError(400, "請先勾選學生");
+        if (!teacherId) throw httpError(400, "請選擇要指定的老師");
+        const t = await env.DB.prepare("SELECT id FROM teachers WHERE id = ?").bind(teacherId).first();
+        if (!t) throw httpError(404, "找不到該老師");
+        const qs = seats.map(() => "?").join(",");
+        const res = await env.DB.prepare(
+          "UPDATE students SET teacher_id = ? WHERE seat IN (" + qs + ") AND class_name = ?"
+        ).bind(teacherId, ...seats, ctx.teacher.className).run();
+        return json({ ok: true, updated: (res.meta && res.meta.changes) || 0 });
       }
       if (path === "/api/students" && method === "DELETE") {
         const ctx = await requireTeacher(request, env);

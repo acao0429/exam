@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>答對題數排名 - 國語月考複習樂園</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="home" data-role="student">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a class="topbar-login" href="index.html">← 返回首頁</a>
+      <span class="topbar-title">🏆 答對題數排名</span>
+      <span></span>
+    </div>
+  </div>
+
+  <main class="screen screen-wide">
+    <div class="panel" style="max-width:440px; margin:0 auto">
+      <h2>🏆 答對題數排名</h2>
+      <p class="hint">本班同學依答對題數由多到少排序。</p>
+      <table class="word-table" style="margin-top:12px">
+        <thead>
+          <tr><th>排名</th><th>座號</th><th>答對數</th><th>總題數</th></tr>
+        </thead>
+        <tbody id="ranking-tbody">
+          <tr><td colspan="4" style="text-align:center">載入中…</td></tr>
+        </tbody>
+      </table>
+      <div class="center" style="margin-top:12px">
+        <button class="btn btn-blue btn-sm" id="ranking-refresh">🔄 重新整理</button>
+      </div>
+      <p class="hint center" id="ranking-msg" style="margin-top:8px"></p>
+    </div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/app-config.js"></script>
+  <script src="js/page-ranking.js"></script>
+</body>
+</html>

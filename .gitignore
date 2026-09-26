@@ -12,6 +12,9 @@ Thumbs.db
 *.tmp
 *.log
 
+# opencode 本地工具（計畫／session 紀錄，不部署上線）
+.opencode/
+
 # Cloudflare Worker
 node_modules/
 .wrangler/
